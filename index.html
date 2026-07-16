@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plataforma de Gestión Comunitaria - Guayaquil</title>
+    <link rel="stylesheet" href="estilos.css">
+    <!-- Firebase desde CDN (versión válida) -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
+</head>
+<body>
+    <!-- SECCIÓN DE LOGIN/REGISTRO -->
+    <section id="auth-section" class="auth-section">
+        <div class="auth-container">
+            <div class="auth-card">
+                <div class="auth-header">
+                    <h1>🤝 Gestión Comunitaria</h1>
+                    <p>Plataforma de Solicitudes de Ayuda</p>
+                </div>
+
+                <!-- FORMULARIO DE LOGIN -->
+                <div id="login-form" class="auth-form">
+                    <h2>Iniciar Sesión</h2>
+                    <form id="form-login">
+                        <div class="form-group">
+                            <label for="login-username">Usuario o Correo:</label>
+                            <input type="text" id="login-username" name="username" placeholder="Tu usuario o correo electrónico" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="login-password">Contraseña:</label>
+                            <input type="password" id="login-password" name="password" required>
+                        </div>
+
+                        <button type="submit" class="btn-primary btn-full">Ingresar</button>
+                    </form>
+
+                    <div class="auth-link">
+                        <p>¿No tienes cuenta? <a href="#" onclick="toggleAuthForms()">Regístrate aquí</a></p>
+                    </div>
+                </div>
+
+                <!-- FORMULARIO DE REGISTRO -->
+                <div id="registro-form" class="auth-form" style="display: none;">
+                    <h2>Crear Cuenta</h2>
+                    <form id="form-registro">
+                        <div class="form-group">
+                            <label for="registro-nombre">Nombre Completo:</label>
+                            <input type="text" id="registro-nombre" name="nombre" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="registro-usuario">Nombre de Usuario:</label>
+                            <input type="text" id="registro-usuario" name="usuario" placeholder="Tu usuario (sin espacios)" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="registro-email">Correo Electrónico:</label>
+                            <input type="email" id="registro-email" name="email" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="registro-password">Contraseña:</label>
+                            <input type="password" id="registro-password" name="password" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="registro-password-confirm">Confirmar Contraseña:</label>
+                            <input type="password" id="registro-password-confirm" name="password_confirm" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="registro-rol">¿Cuál es tu rol?</label>
+                            <select id="registro-rol" name="rol" required>
+                                <option value="">-- Selecciona tu rol --</option>
+                                <option value="ciudadano">👤 Ciudadano (Solo reportar necesidades)</option>
+                                <option value="lider">👨‍💼 Líder Comunitario (Acceso completo)</option>
+                            </select>
+                        </div>
+
+                        <button type="submit" class="btn-primary btn-full">Crear Cuenta</button>
+                    </form>
+
+                    <div class="auth-link">
+                        <p>¿Ya tienes cuenta? <a href="#" onclick="toggleAuthForms()">Inicia sesión aquí</a></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECCIÓN PRINCIPAL (Se muestra después de login) -->
+    <div id="main-content" class="main-content" style="display: none;">
+        <!-- NAVEGACIÓN -->
+        <nav class="navbar">
+        <div class="container">
+            <div class="logo">
+                <h1>🤝 Gestión Comunitaria</h1>
+            </div>
+            <button class="menu-toggle" id="menu-toggle" aria-label="Abrir menú">
+                <span></span><span></span><span></span>
+            </button>
+            <ul class="nav-menu" id="nav-menu">
+                <li><a href="#inicio">Inicio</a></li>
+                <li><a href="#reportar">Reportar Necesidad</a></li>
+                <li><a href="#solicitudes">Mis Solicitudes</a></li>
+                    <li id="menu-admin" style="display: none;"><a href="#admin">📊 Panel Admin</a></li>
+                    <li><a href="#acerca">Acerca De</a></li>
+                    <li style="margin-left: auto;">
+                        <div class="user-info">
+                            <div class="user-details">
+                                <span id="usuario-nombre">Usuario</span>
+                                <span id="usuario-rol" class="usuario-rol"></span>
+                                <span id="firebase-status" class="usuario-rol" style="font-size:0.75rem; opacity:0.95; color: #fff; display:block;">Firebase: --</span>
+                            </div>
+                            <div style="display:flex; gap:8px; align-items:center;">
+                                <button id="btn-firebase-test" class="btn-logout" title="Probar conexión a Firebase">Probar Firebase</button>
+                                <button id="btn-logout" class="btn-logout">Cerrar Sesión</button>
+                            </div>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+
+    <!-- SECCIÓN INICIO / HERO -->
+    <section id="inicio" class="hero">
+        <div class="container hero-inner">
+            <div class="hero-content">
+                <span class="hero-badge">Proyecto Integrador ISTG · 2026</span>
+                <h1>Gestión de Solicitudes de Ayuda Comunitaria</h1>
+                <p>Reporta necesidades de tu barrio —baches, alumbrado, seguridad— y ayuda a construir una Guayaquil mejor, coordinando voluntariado y donaciones.</p>
+                <div class="hero-buttons">
+                    <a href="#reportar" class="btn-primary">📝 Reportar Necesidad</a>
+                    <a href="#acerca" class="btn-secondary">Conoce el Proyecto</a>
+                </div>
+            </div>
+            <div class="hero-features">
+                <div class="feature-card">
+                    <span class="feature-icon">📍</span>
+                    <h3>Ubicación Automática</h3>
+                    <p>Detecta tu barrio con GPS y geocodificación inversa.</p>
+                </div>
+                <div class="feature-card">
+                    <span class="feature-icon">📊</span>
+                    <h3>Seguimiento</h3>
+                    <p>Consulta el estado de cada solicitud reportada.</p>
+                </div>
+                <div class="feature-card">
+                    <span class="feature-icon">👥</span>
+                    <h3>Roles Claros</h3>
+                    <p>Ciudadanos reportan, líderes gestionan y resuelven.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECCIÓN REPORTAR NECESIDAD -->
+    <section id="reportar" class="reportar">
+        <div class="container">
+            <h2>Reportar una Necesidad Comunitaria</h2>
+            <form id="formulario-reporte" class="form-reporte">
+                <div class="form-group">
+                    <label for="nombre">Nombre Completo:</label>
+                    <input type="text" id="nombre" name="nombre" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="email">Correo Electrónico:</label>
+                    <input type="email" id="email" name="email" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="telefono">Teléfono:</label>
+                    <input type="tel" id="telefono" name="telefono">
+                </div>
+
+                <div class="form-group">
+                    <label for="sector">Sector/Barrio:</label>
+                    <div class="input-ubicacion">
+                        <input type="text" id="sector" name="sector" placeholder="Se llenará automáticamente" required>
+                        <button type="button" id="btn-ubicacion" class="btn-ubicacion">📍 Detectar Ubicación</button>
+                    </div>
+                    <small id="ubicacion-info" style="display:none; color: #666; margin-top: 5px;">
+                        📍 Lat: <span id="lat">-</span> | Lon: <span id="lon">-</span>
+                    </small>
+                </div>
+
+                <div class="form-group">
+                    <label for="tipo">Tipo de Necesidad:</label>
+                    <select id="tipo" name="tipo" required>
+                        <option value="">-- Selecciona --</option>
+                        <option value="infraestructura">Infraestructura (baches, calles)</option>
+                        <option value="alumbrado">Alumbrado Público</option>
+                        <option value="seguridad">Seguridad/Delincuencia</option>
+                        <option value="servicios">Servicios Básicos</option>
+                        <option value="educacion">Educación</option>
+                        <option value="salud">Salud</option>
+                        <option value="otro">Otro</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="descripcion">Descripción Detallada:</label>
+                    <textarea id="descripcion" name="descripcion" rows="5" required></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="urgencia">Nivel de Urgencia:</label>
+                    <select id="urgencia" name="urgencia" required>
+                        <option value="baja">Baja</option>
+                        <option value="media">Media</option>
+                        <option value="alta">Alta</option>
+                        <option value="critica">Crítica</option>
+                    </select>
+                </div>
+
+                <button type="submit" class="btn-primary">Enviar Reporte</button>
+            </form>
+        </div>
+    </section>
+
+    <!-- SECCIÓN MIS SOLICITUDES -->
+    <section id="solicitudes" class="solicitudes">
+        <div class="container">
+            <h2>Mis Solicitudes Registradas</h2>
+            <div class="tabla-solicitudes">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Tipo</th>
+                            <th>Sector</th>
+                            <th>Estado</th>
+                            <th>Urgencia</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-cuerpo">
+                        <tr>
+                            <td colspan="5" style="text-align: center; color: #999;">No hay solicitudes registradas</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+        <!-- PANEL ADMINISTRATIVO (Solo para líderes) -->
+        <section id="admin" class="admin-panel" style="display: none;">
+            <div class="container">
+                <h2>📊 Panel de Administración</h2>
+                
+                <div class="admin-stats">
+                    <div class="stat-card">
+                        <h3>Total de Solicitudes</h3>
+                        <p id="stat-total" class="stat-number">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>En Revisión</h3>
+                        <p id="stat-revision" class="stat-number">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Aprobadas</h3>
+                        <p id="stat-aprobadas" class="stat-number">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Críticas</h3>
+                        <p id="stat-criticas" class="stat-number">0</p>
+                    </div>
+                </div>
+
+                <div class="admin-section">
+                    <h3>Todas las Solicitudes (Comunidad)</h3>
+                    <div class="admin-filtros">
+                        <input type="text" id="filtro-busqueda" placeholder="Buscar por sector o nombre...">
+                        <select id="filtro-estado">
+                            <option value="">-- Todos los Estados --</option>
+                            <option value="En revisión">En revisión</option>
+                            <option value="Aprobada">Aprobada</option>
+                            <option value="En proceso">En proceso</option>
+                            <option value="Completada">Completada</option>
+                        </select>
+                    </div>
+                    <div class="tabla-solicitudes">
+                        <table id="tabla-admin">
+                            <thead>
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Usuario</th>
+                                    <th>Sector</th>
+                                    <th>Tipo</th>
+                                    <th>Urgencia</th>
+                                    <th>Estado</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabla-admin-cuerpo">
+                                <tr>
+                                    <td colspan="7" style="text-align: center; color: #999;">No hay solicitudes</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="admin-section">
+                    <h3>Usuarios Registrados</h3>
+                    <div class="admin-filtros">
+                        <input type="text" id="filtro-usuarios" placeholder="Buscar por nombre o correo...">
+                    </div>
+                    <div class="tabla-solicitudes">
+                        <table id="tabla-usuarios">
+                            <thead>
+                                <tr>
+                                    <th>Nombre</th>
+                                    <th>Usuario</th>
+                                    <th>Correo</th>
+                                    <th>Rol</th>
+                                    <th>Fecha Registro</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabla-usuarios-cuerpo">
+                                <tr>
+                                    <td colspan="5" style="text-align: center; color: #999;">No hay usuarios registrados</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <!-- SECCIÓN ACERCA DE -->
+        <section id="acerca" class="acerca">
+            <div class="container">
+                <h2>Acerca De</h2>
+                <div class="acerca-contenido">
+                    <p>Esta plataforma es un <strong>Proyecto Integrador de Saberes 2026-S1</strong> de la carrera de Programación Móvil del <strong>ISTG</strong>, desarrollada para facilitar el reporte y la gestión de necesidades comunitarias en sectores urbano-marginales de Guayaquil.</p>
+                    <h3>🎯 Objetivo</h3>
+                    <p>Brindar un canal digital ágil y accesible para que los ciudadanos reporten necesidades y los líderes comunitarios coordinen una respuesta oportuna.</p>
+                    <h3>🛠️ Tecnologías</h3>
+                    <ul>
+                        <li>HTML5, CSS3 y JavaScript (Vanilla)</li>
+                        <li>Almacenamiento local con LocalStorage</li>
+                        <li>Geolocation API y Nominatim (OpenStreetMap)</li>
+                        <li>Firebase (opcional) para sincronización en la nube</li>
+                    </ul>
+                    <h3>👥 Roles</h3>
+                    <ul>
+                        <li><strong>Ciudadano:</strong> reporta necesidades y consulta sus propias solicitudes.</li>
+                        <li><strong>Líder Comunitario:</strong> accede al panel administrativo y gestiona los estados.</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- FOOTER -->
+        <footer class="footer">
+            <div class="container">
+                <p>&copy; 2026 Plataforma de Gestión Comunitaria | Proyecto Integrador ISTG GRUPO2 Gabriel Salazar, William Quito, Antony Monserrate, Thyrone Rodriguez, Katy Solorzano, Jonathan Osorio</p>
+            </div>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
