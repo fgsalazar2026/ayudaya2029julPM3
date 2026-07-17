@@ -197,6 +197,24 @@ section {
     animation: pulse-urgencia 1.6s infinite;
 }
 
+.estado-pendiente {
+    color: var(--info-dark);
+    background: var(--info-light);
+    border-color: #bfdbfe;
+}
+
+.estado-recibida {
+    color: var(--success-dark);
+    background: var(--success-light);
+    border-color: #a7f3d0;
+}
+
+.estado-rechazada {
+    color: var(--danger-dark);
+    background: var(--danger-light);
+    border-color: #fecaca;
+}
+
 @keyframes pulse-urgencia {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.65; }
@@ -652,14 +670,14 @@ section {
 
 .form-reporte {
     background: var(--card);
-    padding: 1.5rem;
+    padding: 1.3rem;
     border-radius: var(--radius);
     box-shadow: var(--shadow-sm);
     max-width: 520px;
     margin: 0 auto;
     color: #000;
     border: 1px solid var(--border);
-    font-size: 0.85rem;
+    font-size: 0.88rem;
 }
 
 .form-group {
@@ -671,18 +689,18 @@ section {
     margin-bottom: 0.4rem;
     font-weight: 600;
     color: var(--text);
-    font-size: 0.8rem;
+    font-size: 0.82rem;
 }
 
 .form-group input,
 .form-group select,
 .form-group textarea {
     width: 100%;
-    padding: 8px 10px;
+    padding: 9px 11px;
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     font-family: inherit;
-    font-size: 0.85rem;
+    font-size: 0.88rem;
     color: #000;
     font-weight: 500;
     transition: border-color 0.2s, box-shadow 0.2s;
@@ -709,10 +727,11 @@ section {
 #ubicacion-info {
     color: #000 !important;
     font-weight: 600 !important;
+    font-size: 0.82rem !important;
 }
 
 #mapa-reporte {
-    height: 160px;
+    height: 170px;
     border-radius: 10px;
     margin-top: 8px;
     border: 1px solid var(--border);
@@ -720,13 +739,13 @@ section {
 }
 
 .btn-ubicacion {
-    padding: 8px 12px;
+    padding: 9px 14px;
     background: var(--accent);
     color: #fff;
     border: none;
     border-radius: var(--radius-sm);
     cursor: pointer;
-    font-size: 0.85rem;
+    font-size: 0.88rem;
     font-weight: 600;
     transition: background 0.3s, transform 0.15s;
     white-space: nowrap;
@@ -1058,6 +1077,31 @@ table tbody tr:hover {
 }
 
 #tabla-usuarios td {
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--border);
+    color: #000;
+    font-weight: 500;
+    font-size: 12px;
+}
+
+#tabla-donaciones {
+    width: 100%;
+    font-size: 12px;
+}
+
+#tabla-donaciones thead {
+    background: linear-gradient(90deg, #667eea, #764ba2);
+    color: #fff;
+}
+
+#tabla-donaciones th {
+    padding: 8px 10px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 12px;
+}
+
+#tabla-donaciones td {
     padding: 7px 10px;
     border-bottom: 1px solid var(--border);
     color: #000;
@@ -1528,7 +1572,7 @@ select.btn-cambiar-estado {
 }
 
 .modal-cuerpo {
-    padding: 1rem;
+    padding: 0.8rem;
 }
 
 .modal-cuerpo .form-reporte {

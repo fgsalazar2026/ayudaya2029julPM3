@@ -18,6 +18,11 @@ let usuariosPaginaActual = 1;
 const usuariosRegistrosPorPagina = 8;
 let usuariosListaFiltrada = [];
 
+let donaciones = JSON.parse(localStorage.getItem('donaciones')) || [];
+let donacionesPaginaActual = 1;
+const donacionesRegistrosPorPagina = 8;
+let donacionesFiltradas = [];
+
 const firebaseConfig = {
     apiKey: "AIzaSyCCzhQZEjDPdt2MobmkuBdSUUIOhnAZv_s",
     authDomain: "durable-pulsar-382314.firebaseapp.com",
@@ -196,6 +201,25 @@ async function cargarDatosFirebase() {
             }
         }
     }, error => console.error('Error cargando solicitudes desde Firebase:', error));
+
+    // DONACIONES (escucha en tiempo real)
+    db.ref('donaciones').on('value', snapshot => {
+        donaciones = [];
+        if (snapshot.exists()) {
+            snapshot.forEach(child => {
+                donaciones.push({ id: child.key, docId: child.key, ...child.val() });
+                return false;
+            });
+        }
+        guardarDonaciones();
+        if (usuarioActual) {
+            actualizarTablaMisDonaciones();
+            if (usuarioActual.rol === 'lider') {
+                actualizarEstadisticasDonaciones();
+                actualizarTablaDonaciones();
+            }
+        }
+    }, error => console.error('Error cargando donaciones desde Firebase:', error));
 }
 
 // Sincroniza el usuario con Realtime Database SIN bloquear el registro
@@ -227,6 +251,18 @@ async function firebaseAgregarSolicitud(nuevaSolicitud) {
         nuevaSolicitud.id = ref.key;
     } catch (error) {
         console.error('Error guardando solicitud en Firebase:', error);
+    }
+}
+
+async function firebaseAgregarDonacion(nuevaDonacion) {
+    try {
+        const { docId, ...data } = nuevaDonacion;
+        const ref = db.ref('donaciones').push();
+        await ref.set(data);
+        nuevaDonacion.docId = ref.key;
+        nuevaDonacion.id = ref.key;
+    } catch (error) {
+        console.error('Error guardando donación en Firebase:', error);
     }
 }
 
@@ -568,6 +604,79 @@ document.addEventListener('DOMContentLoaded', async function() {
             usuariosPaginaActual = 1;
             actualizarTablaUsuarios();
         });
+    }
+
+    // DONACIONES
+    const btnAbrirDonar = document.getElementById('btn-abrir-donar');
+    const btnAbrirMisDonaciones = document.getElementById('btn-abrir-mis-donaciones');
+    const btnVolverDonar = document.getElementById('btn-volver-donar');
+    const btnVolverMisDonaciones = document.getElementById('btn-volver-mis-donaciones');
+    const modalDonar = document.getElementById('modal-donar');
+    const modalMisDonaciones = document.getElementById('modal-mis-donaciones');
+    const formDonacion = document.getElementById('formulario-donacion');
+    const donTipo = document.getElementById('don-tipo');
+    const grupoMonto = document.getElementById('grupo-monto');
+    const grupoBienes = document.getElementById('grupo-bienes');
+    const btnDonUbicacion = document.getElementById('btn-don-ubicacion');
+
+    if (btnAbrirDonar && modalDonar) btnAbrirDonar.addEventListener('click', abrirModalDonar);
+    if (btnVolverDonar && modalDonar) btnVolverDonar.addEventListener('click', cerrarModalDonar);
+    if (btnAbrirMisDonaciones && modalMisDonaciones) btnAbrirMisDonaciones.addEventListener('click', abrirModalMisDonaciones);
+    if (btnVolverMisDonaciones && modalMisDonaciones) btnVolverMisDonaciones.addEventListener('click', cerrarModalMisDonaciones);
+    if (formDonacion) formDonacion.addEventListener('submit', manejarDonacion);
+
+    if (donTipo) {
+        donTipo.addEventListener('change', () => {
+            const tipo = donTipo.value;
+            if (grupoMonto) grupoMonto.style.display = tipo === 'monetaria' ? 'block' : 'none';
+            if (grupoBienes) grupoBienes.style.display = tipo !== 'monetaria' ? 'block' : 'none';
+        });
+    }
+
+    if (btnDonUbicacion) {
+        btnDonUbicacion.addEventListener('click', () => {
+            if (!navigator.geolocation) {
+                alert('Tu navegador no soporta geolocalización.');
+                return;
+            }
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const lat = position.coords.latitude;
+                    const lon = position.coords.longitude;
+                    coordenadas.lat = lat;
+                    coordenadas.lon = lon;
+                    document.getElementById('don-lat').textContent = lat.toFixed(4);
+                    document.getElementById('don-lon').textContent = lon.toFixed(4);
+                    document.getElementById('don-ubicacion-info').style.display = 'block';
+                    if (mapaReporte && typeof L !== 'undefined') {
+                        mapaReporte.setView([lat, lon], 15);
+                        if (marcadorMapa) mapaReporte.removeLayer(marcadorMapa);
+                        marcadorMapa = L.marker([lat, lon]).addTo(mapaReporte);
+                    }
+                },
+                () => alert('No se pudo obtener la ubicación.')
+            );
+        });
+    }
+
+    // LISTENERS DE DONACIONES EN PANEL ADMIN
+    const filtroDonBusqueda = document.getElementById('filtro-donaciones');
+    const filtroDonEstado = document.getElementById('filtro-don-estado');
+    const btnExportarDonacionesExcel = document.getElementById('btn-exportar-donaciones-excel');
+    if (filtroDonBusqueda) {
+        filtroDonBusqueda.addEventListener('keyup', () => {
+            donacionesPaginaActual = 1;
+            actualizarTablaDonaciones();
+        });
+    }
+    if (filtroDonEstado) {
+        filtroDonEstado.addEventListener('change', () => {
+            donacionesPaginaActual = 1;
+            actualizarTablaDonaciones();
+        });
+    }
+    if (btnExportarDonacionesExcel) {
+        btnExportarDonacionesExcel.addEventListener('click', exportarDonacionesAExcel);
     }
     
     // Agregar estilos dinámicos
@@ -1463,6 +1572,8 @@ function abrirModalAdmin() {
     actualizarEstadisticas();
     actualizarTablasAdmin();
     actualizarTablaUsuarios();
+    actualizarEstadisticasDonaciones();
+    actualizarTablaDonaciones();
     modal.style.display = 'flex';
 }
 
@@ -1542,6 +1653,238 @@ function exportarUsuariosAExcel() {
     XLSX.utils.book_append_sheet(wb, ws, 'Usuarios');
     const fecha = new Date().toISOString().slice(0, 10);
     XLSX.writeFile(wb, `usuarios_${fecha}.xlsx`);
+}
+
+// ===== DONACIONES =====
+function guardarDonaciones() {
+    try {
+        localStorage.setItem('donaciones', JSON.stringify(donaciones));
+    } catch (error) {
+        console.error('Error al guardar donaciones:', error);
+    }
+}
+
+function abrirModalDonar() {
+    const modal = document.getElementById('modal-donar');
+    if (!modal) return;
+    document.getElementById('formulario-donacion').reset();
+    document.getElementById('don-sector').value = usuarioActual ? (usuarioActual.sector || usuarioActual.direccion || '') : '';
+    document.getElementById('don-solicitud').innerHTML = '<option value="">-- Sin vinculación --</option>';
+    (solicitudes || []).forEach(s => {
+        const option = document.createElement('option');
+        option.value = s.id;
+        option.textContent = `${s.fecha} - ${s.sector} - ${s.tipo}`;
+        document.getElementById('don-solicitud').appendChild(option);
+    });
+    modal.style.display = 'flex';
+}
+
+function cerrarModalDonar() {
+    const modal = document.getElementById('modal-donar');
+    if (modal) modal.style.display = 'none';
+}
+
+function abrirModalMisDonaciones() {
+    const modal = document.getElementById('modal-mis-donaciones');
+    if (!modal) return;
+    actualizarTablaMisDonaciones();
+    modal.style.display = 'flex';
+}
+
+function cerrarModalMisDonaciones() {
+    const modal = document.getElementById('modal-mis-donaciones');
+    if (modal) modal.style.display = 'none';
+}
+
+function manejarDonacion(e) {
+    e.preventDefault();
+    const tipo = document.getElementById('don-tipo').value;
+    const categoria = document.getElementById('don-categoria').value;
+    const monto = document.getElementById('don-monto').value ? Number(document.getElementById('don-monto').value) : null;
+    const descripcionBienes = document.getElementById('don-bienes').value || '';
+    const sector = document.getElementById('don-sector').value;
+    const solicitudId = document.getElementById('don-solicitud').value ? Number(document.getElementById('don-solicitud').value) : null;
+
+    if (!tipo || !categoria || !sector) {
+        alert('❌ Completa los campos obligatorios');
+        return;
+    }
+
+    const nuevaDonacion = {
+        id: Date.now(),
+        fecha: new Date().toLocaleDateString('es-ES'),
+        donante: usuarioActual ? usuarioActual.nombre : 'Anónimo',
+        email: usuarioActual ? usuarioActual.email : '',
+        telefono: usuarioActual ? (usuarioActual.telefono || '') : '',
+        tipo,
+        categoria,
+        monto: tipo === 'monetaria' ? monto : null,
+        descripcionBienes: tipo !== 'monetaria' ? descripcionBienes : '',
+        sector,
+        coordenadas: { ...coordenadas },
+        solicitudId,
+        estado: 'Pendiente',
+        usuarioId: usuarioActual ? usuarioActual.id : null
+    };
+
+    if (firebaseEnabled && db) {
+        firebaseAgregarDonacion(nuevaDonacion);
+    } else {
+        donaciones.push(nuevaDonacion);
+        guardarDonaciones();
+    }
+
+    alert('✅ Donación registrada exitosamente');
+    cerrarModalDonar();
+}
+
+function actualizarTablaMisDonaciones() {
+    const tabla = document.getElementById('tabla-mis-donaciones-cuerpo');
+    if (!tabla) return;
+    tabla.innerHTML = '';
+
+    const misDonaciones = donaciones.filter(d => usuarioActual && d.usuarioId === usuarioActual.id);
+
+    if (misDonaciones.length === 0) {
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = 5;
+        td.style.textAlign = 'center';
+        td.style.color = '#999';
+        td.textContent = 'No hay donaciones registradas';
+        tr.appendChild(td);
+        tabla.appendChild(tr);
+        return;
+    }
+
+    misDonaciones.forEach(d => {
+        const tr = document.createElement('tr');
+        const tdFecha = document.createElement('td'); tdFecha.textContent = d.fecha; tr.appendChild(tdFecha);
+        const tdTipo = document.createElement('td'); tdTipo.textContent = d.tipo; tr.appendChild(tdTipo);
+        const tdCat = document.createElement('td'); tdCat.textContent = d.categoria; tr.appendChild(tdCat);
+        const tdMonto = document.createElement('td'); tdMonto.textContent = d.monto ? `$${d.monto}` : (d.descripcionBienes || '-'); tr.appendChild(tdMonto);
+        const tdEstado = document.createElement('td');
+        const spanEstado = document.createElement('span');
+        const estadoClase = d.estado === 'Recibida' ? 'badge badge-success' : d.estado === 'Rechazada' ? 'badge badge-danger' : 'badge badge-info';
+        spanEstado.className = estadoClase;
+        spanEstado.textContent = d.estado;
+        tdEstado.appendChild(spanEstado);
+        tr.appendChild(tdEstado);
+        tabla.appendChild(tr);
+    });
+}
+
+function actualizarTablaDonaciones() {
+    const tabla = document.getElementById('tabla-donaciones-cuerpo');
+    if (!tabla) return;
+    tabla.innerHTML = '';
+    const busqueda = document.getElementById('filtro-donaciones')?.value.toLowerCase() || '';
+    const filtroEstado = document.getElementById('filtro-don-estado')?.value || '';
+
+    let donacionesFiltradas = donaciones.slice();
+
+    if (busqueda) {
+        donacionesFiltradas = donacionesFiltradas.filter(d =>
+            (d.donante || '').toLowerCase().includes(busqueda) ||
+            (d.categoria || '').toLowerCase().includes(busqueda)
+        );
+    }
+
+    if (filtroEstado) {
+        donacionesFiltradas = donacionesFiltradas.filter(d => d.estado === filtroEstado);
+    }
+
+    if (donacionesFiltradas.length === 0) {
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = 7; td.style.textAlign = 'center'; td.style.color = '#999'; td.textContent = 'No hay donaciones';
+        tr.appendChild(td);
+        tabla.appendChild(tr);
+        return;
+    }
+
+    donacionesFiltradas.forEach(d => {
+        const tr = document.createElement('tr');
+        const tdFecha = document.createElement('td'); tdFecha.textContent = d.fecha; tr.appendChild(tdFecha);
+        const tdDonante = document.createElement('td'); tdDonante.textContent = d.donante; tr.appendChild(tdDonante);
+        const tdTipo = document.createElement('td'); tdTipo.textContent = d.tipo; tr.appendChild(tdTipo);
+        const tdCat = document.createElement('td'); tdCat.textContent = d.categoria; tr.appendChild(tdCat);
+        const tdMonto = document.createElement('td'); tdMonto.textContent = d.monto ? `$${d.monto}` : (d.descripcionBienes || '-'); tr.appendChild(tdMonto);
+        const tdEstado = document.createElement('td');
+        const spanEstado = document.createElement('span');
+        const estadoClase = d.estado === 'Recibida' ? 'badge badge-success' : d.estado === 'Rechazada' ? 'badge badge-danger' : 'badge badge-info';
+        spanEstado.className = estadoClase;
+        spanEstado.textContent = d.estado;
+        tdEstado.appendChild(spanEstado);
+        tr.appendChild(tdEstado);
+        const tdAcc = document.createElement('td');
+        const select = document.createElement('select'); select.className = 'btn-cambiar-estado';
+        const opt0 = document.createElement('option'); opt0.value = ''; opt0.textContent = '-- Cambiar --'; select.appendChild(opt0);
+        const estados = ['Pendiente','Recibida','Rechazada'];
+        estados.forEach(val => { const o = document.createElement('option'); o.value = val; o.textContent = val; select.appendChild(o); });
+        select.addEventListener('change', function() { cambiarEstadoDonacion(d.id, this.value); });
+        tdAcc.appendChild(select);
+        tr.appendChild(tdAcc);
+        tabla.appendChild(tr);
+    });
+}
+
+function cambiarEstadoDonacion(donacionId, nuevoEstado) {
+    if (!nuevoEstado) return;
+    const donacion = donaciones.find(d => Number(d.id) === Number(donacionId));
+    if (!donacion) {
+        alert('❌ No se encontró la donación');
+        return;
+    }
+    donacion.estado = nuevoEstado;
+    guardarDonaciones();
+    actualizarEstadisticasDonaciones();
+    actualizarTablaDonaciones();
+    alert('✅ Estado de donación actualizado correctamente');
+}
+
+function actualizarEstadisticasDonaciones() {
+    const total = donaciones.length;
+    const pendientes = donaciones.filter(d => d.estado === 'Pendiente').length;
+    const recibidas = donaciones.filter(d => d.estado === 'Recibida').length;
+    const montoTotal = donaciones.reduce((sum, d) => sum + (d.monto || 0), 0);
+
+    const statTotal = document.getElementById('stat-don-total');
+    const statPendientes = document.getElementById('stat-don-pendientes');
+    const statRecibidas = document.getElementById('stat-don-recibidas');
+    const statMonto = document.getElementById('stat-don-monto');
+    if (statTotal) statTotal.textContent = total;
+    if (statPendientes) statPendientes.textContent = pendientes;
+    if (statRecibidas) statRecibidas.textContent = recibidas;
+    if (statMonto) statMonto.textContent = `$${montoTotal}`;
+}
+
+function exportarDonacionesAExcel() {
+    if (typeof XLSX === 'undefined') {
+        alert('❌ No se pudo exportar porque la librería de Excel no está disponible.');
+        return;
+    }
+    if (!donaciones || donaciones.length === 0) {
+        alert('❌ No hay donaciones para exportar.');
+        return;
+    }
+
+    const datos = donaciones.map(d => ({
+        Fecha: d.fecha || '',
+        Donante: d.donante || '',
+        Tipo: d.tipo || '',
+        Categoria: d.categoria || '',
+        Monto: d.monto || '',
+        Descripcion: d.descripcionBienes || '',
+        Sector: d.sector || '',
+        Estado: d.estado || ''
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(datos);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Donaciones');
+    const fecha = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `donaciones_${fecha}.xlsx`);
 }
 
 // ABRIR / CERRAR VENTANA MODAL DE ACERCA DE
