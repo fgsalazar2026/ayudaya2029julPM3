@@ -618,12 +618,23 @@ document.addEventListener('DOMContentLoaded', async function() {
     const grupoMonto = document.getElementById('grupo-monto');
     const grupoBienes = document.getElementById('grupo-bienes');
     const btnDonUbicacion = document.getElementById('btn-don-ubicacion');
+    const logoPrincipal = document.getElementById('logo-principal');
+    const navDonar = document.getElementById('nav-donar');
 
     if (btnAbrirDonar && modalDonar) btnAbrirDonar.addEventListener('click', abrirModalDonar);
+    if (navDonar && modalDonar) navDonar.addEventListener('click', abrirModalDonar);
     if (btnVolverDonar && modalDonar) btnVolverDonar.addEventListener('click', cerrarModalDonar);
     if (btnAbrirMisDonaciones && modalMisDonaciones) btnAbrirMisDonaciones.addEventListener('click', abrirModalMisDonaciones);
     if (btnVolverMisDonaciones && modalMisDonaciones) btnVolverMisDonaciones.addEventListener('click', cerrarModalMisDonaciones);
-    if (formDonacion) formDonacion.addEventListener('submit', manejarDonacion);
+    if (formDonacion) {
+        console.log('Formulario de donación encontrado, asignando listener...');
+        formDonacion.addEventListener('submit', manejarDonacion);
+    } else {
+        console.error('Formulario de donación NO encontrado');
+    }
+    if (logoPrincipal && modalDonar) {
+        logoPrincipal.addEventListener('click', () => abrirModalDonar());
+    }
 
     if (donTipo) {
         donTipo.addEventListener('change', () => {
@@ -678,6 +689,27 @@ document.addEventListener('DOMContentLoaded', async function() {
     if (btnExportarDonacionesExcel) {
         btnExportarDonacionesExcel.addEventListener('click', exportarDonacionesAExcel);
     }
+
+    // ESTADÍSTICAS / DASHBOARD
+    const btnAbrirEstadisticas = document.getElementById('btn-abrir-estadisticas');
+    const btnVolverEstadisticas = document.getElementById('btn-volver-estadisticas');
+    const modalEstadisticas = document.getElementById('modal-estadisticas');
+
+    if (btnAbrirEstadisticas && modalEstadisticas) {
+        btnAbrirEstadisticas.addEventListener('click', abrirModalEstadisticas);
+    }
+    if (btnVolverEstadisticas && modalEstadisticas) {
+        btnVolverEstadisticas.addEventListener('click', cerrarModalEstadisticas);
+    }
+    if (modalEstadisticas) {
+        modalEstadisticas.addEventListener('click', (e) => {
+            if (e.target === modalEstadisticas) cerrarModalEstadisticas();
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && modalEstadisticas.style.display === 'flex') cerrarModalEstadisticas();
+        });
+    }
+    initDashboardTabs();
     
     // Agregar estilos dinámicos
     agregarEstilosDinamicos();
@@ -1582,6 +1614,341 @@ function cerrarModalAdmin() {
     if (modal) modal.style.display = 'none';
 }
 
+// ===== ESTADÍSTICAS / DASHBOARD GERENCIAL =====
+function abrirModalEstadisticas() {
+    const modal = document.getElementById('modal-estadisticas');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    setTimeout(() => {
+        generarGraficoSolicitudes();
+        generarGraficoDonaciones();
+        generarGraficoUsuarios();
+    }, 100);
+}
+
+function cerrarModalEstadisticas() {
+    const modal = document.getElementById('modal-estadisticas');
+    if (modal) modal.style.display = 'none';
+}
+
+function generarGraficoSolicitudes() {
+    // Solicitudes por sector
+    const sectores = {};
+    solicitudes.forEach(s => {
+        const key = s.sector || 'Sin sector';
+        sectores[key] = (sectores[key] || 0) + 1;
+    });
+
+    const ctxSector = document.getElementById('chart-solicitudes-sector');
+    if (ctxSector) {
+        new Chart(ctxSector, {
+            type: 'bar',
+            data: {
+                labels: Object.keys(sectores),
+                datasets: [{
+                    label: 'Solicitudes',
+                    data: Object.values(sectores),
+                    backgroundColor: 'rgba(0, 163, 212, 0.8)',
+                    borderColor: 'rgba(0, 163, 212, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                }
+            }
+        });
+    }
+
+    // Tipos de necesidades
+    const tipos = {};
+    solicitudes.forEach(s => {
+        const key = s.tipo || 'Sin tipo';
+        tipos[key] = (tipos[key] || 0) + 1;
+    });
+
+    const ctxTipo = document.getElementById('chart-solicitudes-tipo');
+    if (ctxTipo) {
+        new Chart(ctxTipo, {
+            type: 'doughnut',
+            data: {
+                labels: Object.keys(tipos),
+                datasets: [{
+                    data: Object.values(tipos),
+                    backgroundColor: [
+                        'rgba(0, 163, 212, 0.8)',
+                        'rgba(16, 185, 129, 0.8)',
+                        'rgba(245, 158, 11, 0.8)',
+                        'rgba(239, 68, 68, 0.8)',
+                        'rgba(139, 92, 246, 0.8)',
+                        'rgba(236, 72, 153, 0.8)',
+                        'rgba(107, 114, 128, 0.8)'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+    }
+
+    // Estados
+    const estados = {};
+    solicitudes.forEach(s => {
+        const key = s.estado || 'Sin estado';
+        estados[key] = (estados[key] || 0) + 1;
+    });
+
+    const ctxEstado = document.getElementById('chart-solicitudes-estado');
+    if (ctxEstado) {
+        new Chart(ctxEstado, {
+            type: 'pie',
+            data: {
+                labels: Object.keys(estados),
+                datasets: [{
+                    data: Object.values(estados),
+                    backgroundColor: [
+                        'rgba(59, 130, 246, 0.8)',
+                        'rgba(16, 185, 129, 0.8)',
+                        'rgba(245, 158, 11, 0.8)',
+                        'rgba(139, 92, 246, 0.8)'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+    }
+
+    // Urgencias
+    const urgencias = {};
+    solicitudes.forEach(s => {
+        const key = s.urgencia || 'Sin urgencia';
+        urgencias[key] = (urgencias[key] || 0) + 1;
+    });
+
+    const ctxUrgencia = document.getElementById('chart-solicitudes-urgencia');
+    if (ctxUrgencia) {
+        new Chart(ctxUrgencia, {
+            type: 'bar',
+            data: {
+                labels: Object.keys(urgencias),
+                datasets: [{
+                    label: 'Cantidad',
+                    data: Object.values(urgencias),
+                    backgroundColor: [
+                        'rgba(16, 185, 129, 0.8)',
+                        'rgba(245, 158, 11, 0.8)',
+                        'rgba(239, 68, 68, 0.8)',
+                        'rgba(220, 38, 38, 0.8)'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                }
+            }
+        });
+    }
+}
+
+function generarGraficoDonaciones() {
+    // Donaciones por categoría
+    const categorias = {};
+    donaciones.forEach(d => {
+        const key = d.categoria || 'Sin categoría';
+        categorias[key] = (categorias[key] || 0) + 1;
+    });
+
+    const ctxCat = document.getElementById('chart-donaciones-categoria');
+    if (ctxCat) {
+        new Chart(ctxCat, {
+            type: 'bar',
+            data: {
+                labels: Object.keys(categorias),
+                datasets: [{
+                    label: 'Donaciones',
+                    data: Object.values(categorias),
+                    backgroundColor: 'rgba(16, 185, 129, 0.8)',
+                    borderColor: 'rgba(16, 185, 129, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                }
+            }
+        });
+    }
+
+    // Tipos de donación
+    const tipos = {};
+    donaciones.forEach(d => {
+        const key = d.tipo || 'Sin tipo';
+        tipos[key] = (tipos[key] || 0) + 1;
+    });
+
+    const ctxTipo = document.getElementById('chart-donaciones-tipo');
+    if (ctxTipo) {
+        new Chart(ctxTipo, {
+            type: 'doughnut',
+            data: {
+                labels: Object.keys(tipos),
+                datasets: [{
+                    data: Object.values(tipos),
+                    backgroundColor: [
+                        'rgba(0, 163, 212, 0.8)',
+                        'rgba(16, 185, 129, 0.8)',
+                        'rgba(245, 158, 11, 0.8)'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+    }
+
+    // Estados de donaciones
+    const estados = {};
+    donaciones.forEach(d => {
+        const key = d.estado || 'Sin estado';
+        estados[key] = (estados[key] || 0) + 1;
+    });
+
+    const ctxEstado = document.getElementById('chart-donaciones-estado');
+    if (ctxEstado) {
+        new Chart(ctxEstado, {
+            type: 'pie',
+            data: {
+                labels: Object.keys(estados),
+                datasets: [{
+                    data: Object.values(estados),
+                    backgroundColor: [
+                        'rgba(59, 130, 246, 0.8)',
+                        'rgba(16, 185, 129, 0.8)',
+                        'rgba(239, 68, 68, 0.8)'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+    }
+
+    // Donaciones por mes
+    const meses = {};
+    donaciones.forEach(d => {
+        const fecha = new Date(d.fecha);
+        const key = fecha.toLocaleString('es-ES', { month: 'short', year: 'numeric' });
+        meses[key] = (meses[key] || 0) + 1;
+    });
+
+    const ctxMes = document.getElementById('chart-donaciones-mes');
+    if (ctxMes) {
+        new Chart(ctxMes, {
+            type: 'line',
+            data: {
+                labels: Object.keys(meses),
+                datasets: [{
+                    label: 'Donaciones',
+                    data: Object.values(meses),
+                    borderColor: 'rgba(16, 185, 129, 1)',
+                    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                }
+            }
+        });
+    }
+}
+
+function generarGraficoUsuarios() {
+    // Usuarios por rol
+    const roles = {};
+    [...usuarios, ...usuariosAgregados].forEach(u => {
+        const key = u.rol === 'lider' ? 'Líder' : 'Ciudadano';
+        roles[key] = (roles[key] || 0) + 1;
+    });
+
+    const ctxRol = document.getElementById('chart-usuarios-rol');
+    if (ctxRol) {
+        new Chart(ctxRol, {
+            type: 'pie',
+            data: {
+                labels: Object.keys(roles),
+                datasets: [{
+                    data: Object.values(roles),
+                    backgroundColor: [
+                        'rgba(139, 92, 246, 0.8)',
+                        'rgba(0, 163, 212, 0.8)'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+    }
+
+    // Registro por mes
+    const meses = {};
+    [...usuarios, ...usuariosAgregados].forEach(u => {
+        if (u.fechaRegistro) {
+            const fecha = new Date(u.fechaRegistro);
+            const key = fecha.toLocaleString('es-ES', { month: 'short', year: 'numeric' });
+            meses[key] = (meses[key] || 0) + 1;
+        }
+    });
+
+    const ctxMes = document.getElementById('chart-usuarios-mes');
+    if (ctxMes) {
+        new Chart(ctxMes, {
+            type: 'bar',
+            data: {
+                labels: Object.keys(meses),
+                datasets: [{
+                    label: 'Usuarios',
+                    data: Object.values(meses),
+                    backgroundColor: 'rgba(139, 92, 246, 0.8)',
+                    borderColor: 'rgba(139, 92, 246, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                }
+            }
+        });
+    }
+}
+
 // TABS DEL PANEL ADMIN
 function initAdminTabs() {
     const tabs = document.querySelectorAll('.admin-tab');
@@ -1594,6 +1961,23 @@ function initAdminTabs() {
             tab.classList.add('active');
             document.querySelectorAll('.admin-tab-content').forEach(content => {
                 content.classList.toggle('active', content.id === 'tab-' + target);
+            });
+        });
+    });
+}
+
+// TABS DEL DASHBOARD DE ESTADÍSTICAS
+function initDashboardTabs() {
+    const tabs = document.querySelectorAll('.dashboard-tab');
+    if (!tabs.length) return;
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            const target = tab.dataset.dashboard;
+            if (!target) return;
+            tabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            document.querySelectorAll('.dashboard-content').forEach(content => {
+                content.classList.toggle('active', content.id === 'dashboard-' + target);
             });
         });
     });
@@ -1659,14 +2043,20 @@ function exportarUsuariosAExcel() {
 function guardarDonaciones() {
     try {
         localStorage.setItem('donaciones', JSON.stringify(donaciones));
+        console.log('Donaciones guardadas en localStorage:', donaciones.length);
     } catch (error) {
         console.error('Error al guardar donaciones:', error);
+        alert('❌ No se pudo guardar la donación. El almacenamiento local puede estar lleno.');
     }
 }
 
 function abrirModalDonar() {
     const modal = document.getElementById('modal-donar');
-    if (!modal) return;
+    if (!modal) {
+        console.error('Modal de donación no encontrado');
+        return;
+    }
+    console.log('Abriendo modal de donación...');
     document.getElementById('formulario-donacion').reset();
     document.getElementById('don-sector').value = usuarioActual ? (usuarioActual.sector || usuarioActual.direccion || '') : '';
     document.getElementById('don-solicitud').innerHTML = '<option value="">-- Sin vinculación --</option>';
@@ -1677,6 +2067,7 @@ function abrirModalDonar() {
         document.getElementById('don-solicitud').appendChild(option);
     });
     modal.style.display = 'flex';
+    console.log('Modal de donación abierto');
 }
 
 function cerrarModalDonar() {
@@ -1705,6 +2096,8 @@ function manejarDonacion(e) {
     const sector = document.getElementById('don-sector').value;
     const solicitudId = document.getElementById('don-solicitud').value ? Number(document.getElementById('don-solicitud').value) : null;
 
+    console.log('Intentando guardar donacion:', { tipo, categoria, monto, sector, solicitudId });
+    
     if (!tipo || !categoria || !sector) {
         alert('❌ Completa los campos obligatorios');
         return;
@@ -1727,11 +2120,16 @@ function manejarDonacion(e) {
         usuarioId: usuarioActual ? usuarioActual.id : null
     };
 
+    console.log('Nueva donacion creada:', nuevaDonacion);
+
     if (firebaseEnabled && db) {
+        console.log('Guardando en Firebase...');
         firebaseAgregarDonacion(nuevaDonacion);
     } else {
+        console.log('Guardando localmente...');
         donaciones.push(nuevaDonacion);
         guardarDonaciones();
+        console.log('Donaciones guardadas:', donaciones.length);
     }
 
     alert('✅ Donación registrada exitosamente');

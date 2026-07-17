@@ -315,6 +315,15 @@ section {
     position: relative;
 }
 
+.logo {
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.logo:hover {
+    opacity: 0.85;
+}
+
 .logo h1 {
     font-size: 1.2rem;
     margin: 0;
@@ -1107,6 +1116,70 @@ table tbody tr:hover {
     color: #000;
     font-weight: 500;
     font-size: 12px;
+}
+
+.dashboard-tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 1.5rem;
+    border-bottom: 2px solid var(--border);
+    padding-bottom: 10px;
+}
+
+.dashboard-tab {
+    padding: 10px 20px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: all 0.2s ease;
+    font-size: 0.95rem;
+}
+
+.dashboard-tab:hover {
+    background: var(--bg);
+    color: var(--text);
+}
+
+.dashboard-tab.active {
+    background: var(--primary);
+    color: #fff;
+}
+
+.dashboard-content {
+    display: none;
+}
+
+.dashboard-content.active {
+    display: block;
+}
+
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+    gap: 20px;
+}
+
+.dashboard-card {
+    background: var(--card);
+    padding: 1.5rem;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border);
+}
+
+.dashboard-card h3 {
+    color: var(--text);
+    margin-bottom: 1rem;
+    font-weight: 700;
+    font-size: 1rem;
+}
+
+.chart-container {
+    position: relative;
+    height: 280px;
 }
 
 .admin-paginacion {
