@@ -2,10 +2,21 @@
 let usuarios = JSON.parse(localStorage.getItem('usuarios')) || [];
 let solicitudes = JSON.parse(localStorage.getItem('solicitudes')) || [];
 let usuarioActual = JSON.parse(localStorage.getItem('usuarioActual')) || null;
+let usuariosAgregados = JSON.parse(localStorage.getItem('usuariosAgregados')) || [];
 let coordenadas = {
     lat: null,
     lon: null
 };
+
+let mapaReporte = null;
+let marcadorMapa = null;
+
+let adminPaginaActual = 1;
+const adminRegistrosPorPagina = 8;
+let adminSolicitudesFiltradas = [];
+let usuariosPaginaActual = 1;
+const usuariosRegistrosPorPagina = 8;
+let usuariosListaFiltrada = [];
 
 const firebaseConfig = {
     apiKey: "AIzaSyCCzhQZEjDPdt2MobmkuBdSUUIOhnAZv_s",
@@ -19,6 +30,26 @@ const firebaseConfig = {
 };
 let db = null;
 let firebaseEnabled = false;
+let cuotaAvisada = false;
+let cuotaAvisadaSesion = false;
+
+function guardarSolicitudes() {
+    try {
+        localStorage.setItem('solicitudes', JSON.stringify(solicitudes));
+    } catch (error) {
+        if (error && error.name === 'QuotaExceededError') {
+            console.warn('localStorage lleno, limpiando fotos de solicitudes...');
+            solicitudes.forEach(s => { s.foto = null; });
+            try {
+                localStorage.setItem('solicitudes', JSON.stringify(solicitudes));
+            } catch (e) {
+                console.error('No se pudo guardar solicitudes incluso sin fotos:', e);
+            }
+        } else {
+            console.error('Error al guardar solicitudes:', error);
+        }
+    }
+}
 
 function actualizarFirebaseStatus(text, ok = false) {
     const statusEl = document.getElementById('firebase-status');
@@ -156,7 +187,7 @@ async function cargarDatosFirebase() {
                 return false;
             });
         }
-        localStorage.setItem('solicitudes', JSON.stringify(solicitudes));
+        guardarSolicitudes();
         if (usuarioActual) {
             actualizarTabla();
             if (usuarioActual.rol === 'lider') {
@@ -181,8 +212,9 @@ async function sincronizarUsuarioFirebase(nuevoUsuario) {
         localStorage.setItem('usuarios', JSON.stringify(usuarios));
         console.log('✅ Usuario sincronizado con Firebase:', nuevoUsuario.usuario);
     } catch (error) {
-        console.warn('⚠️ Cuenta guardada solo en este dispositivo (no se sincronizó con Firebase):',
-            error && error.message ? error.message : error);
+        console.warn('⚠️ Error al sincronizar con Firebase, guardando localmente:', error);
+        usuarios.push(nuevoUsuario);
+        localStorage.setItem('usuarios', JSON.stringify(usuarios));
     }
 }
 
@@ -240,19 +272,303 @@ document.addEventListener('DOMContentLoaded', async function() {
         formularioReporte.addEventListener('submit', manejarReporte);
     }
     
+    // PREVIEW DE FOTO
+    const inputFoto = document.getElementById('foto');
+    const previewFoto = document.getElementById('preview-foto');
+    if (inputFoto && previewFoto) {
+        inputFoto.addEventListener('change', () => {
+            const file = inputFoto.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    previewFoto.src = e.target.result;
+                    previewFoto.style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            } else {
+                previewFoto.src = '';
+                previewFoto.style.display = 'none';
+            }
+        });
+    }
+    
     // LISTENERS DE UBICACIÓN
     const btnUbicacion = document.getElementById('btn-ubicacion');
     if (btnUbicacion) {
         btnUbicacion.addEventListener('click', detectarUbicacion);
     }
+
+    // LISTENERS DE LA VENTANA MODAL DE REPORTE
+    const modalReporte = document.getElementById('modal-reporte');
+    const btnAbrirReporte = document.getElementById('btn-abrir-reporte');
+    const btnVolverReporte = document.getElementById('btn-volver-reporte');
+    if (btnAbrirReporte && modalReporte) {
+        btnAbrirReporte.addEventListener('click', () => abrirModalReporte());
+    }
+    if (btnVolverReporte && modalReporte) {
+        btnVolverReporte.addEventListener('click', () => cerrarModalReporte());
+    }
+    if (modalReporte) {
+        // Cerrar al hacer clic fuera de la ventana
+        modalReporte.addEventListener('click', (e) => {
+            if (e.target === modalReporte) cerrarModalReporte();
+        });
+        // Cerrar con la tecla Escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && modalReporte.style.display === 'flex') cerrarModalReporte();
+        });
+    }
+
+    // LISTENERS DE LA VENTANA MODAL DE MIS SOLICITUDES
+    const modalSolicitudes = document.getElementById('modal-solicitudes');
+    const btnAbrirSolicitudes = document.getElementById('btn-abrir-solicitudes');
+    const btnVolverSolicitudes = document.getElementById('btn-volver-solicitudes');
+    if (btnAbrirSolicitudes && modalSolicitudes) {
+        btnAbrirSolicitudes.addEventListener('click', () => abrirModalSolicitudes());
+    }
+    if (btnVolverSolicitudes && modalSolicitudes) {
+        btnVolverSolicitudes.addEventListener('click', () => cerrarModalSolicitudes());
+    }
+    if (modalSolicitudes) {
+        modalSolicitudes.addEventListener('click', (e) => {
+            if (e.target === modalSolicitudes) cerrarModalSolicitudes();
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && modalSolicitudes.style.display === 'flex') cerrarModalSolicitudes();
+        });
+    }
+
+    // LISTENERS DE LA VENTANA MODAL DEL PANEL ADMIN
+    const modalAdmin = document.getElementById('modal-admin');
+    const btnAbrirAdmin = document.getElementById('btn-abrir-admin');
+    const btnVolverAdmin = document.getElementById('btn-volver-admin');
+    const btnExportarExcel = document.getElementById('btn-exportar-excel');
+    const btnExportarUsuariosExcel = document.getElementById('btn-exportar-usuarios-excel');
+    if (btnAbrirAdmin && modalAdmin) {
+        btnAbrirAdmin.addEventListener('click', () => abrirModalAdmin());
+    }
+    if (btnVolverAdmin && modalAdmin) {
+        btnVolverAdmin.addEventListener('click', () => cerrarModalAdmin());
+    }
+    if (btnExportarExcel) {
+        btnExportarExcel.addEventListener('click', exportarSolicitudesAExcel);
+    }
+    if (btnExportarUsuariosExcel) {
+        btnExportarUsuariosExcel.addEventListener('click', exportarUsuariosAExcel);
+    }
+    if (modalAdmin) {
+        modalAdmin.addEventListener('click', (e) => {
+            if (e.target === modalAdmin) cerrarModalAdmin();
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && modalAdmin.style.display === 'flex') cerrarModalAdmin();
+        });
+    }
+    initAdminTabs();
+
+    // PREVIEW DE FOTO EN EDITAR PERFIL
+    const inputFotoPerfil = document.getElementById('perfil-foto');
+    const previewPerfilFoto = document.getElementById('preview-perfil-foto');
+    if (inputFotoPerfil && previewPerfilFoto) {
+        inputFotoPerfil.addEventListener('change', () => {
+            const file = inputFotoPerfil.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    previewPerfilFoto.src = e.target.result;
+                    previewPerfilFoto.style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            } else {
+                previewPerfilFoto.src = usuarioActual && usuarioActual.foto ? usuarioActual.foto : '';
+                previewPerfilFoto.style.display = usuarioActual && usuarioActual.foto ? 'block' : 'none';
+            }
+        });
+    }
+
+    // BOTONES DEL MENÚ Y HERO QUE ABREN LOS MODALES DIRECTAMENTE
+    const navReportar = document.getElementById('nav-reportar');
+    const navSolicitudes = document.getElementById('nav-solicitudes');
+    const navAdmin = document.getElementById('nav-admin');
+    const heroReportar = document.getElementById('hero-reportar');
+    if (navReportar) navReportar.addEventListener('click', () => { abrirModalReporte(); cerrarDropdown(); });
+    if (navSolicitudes) navSolicitudes.addEventListener('click', () => { abrirModalSolicitudes(); });
+    if (navAdmin) navAdmin.addEventListener('click', () => { abrirModalAdmin(); });
+    if (heroReportar) heroReportar.addEventListener('click', () => abrirModalReporte());
+
+    // VENTANA MODAL: ACERCA DE
+    const btnAbrirAcerca = document.getElementById('btn-abrir-acerca');
+    const btnVolverAcerca = document.getElementById('btn-volver-acerca');
+    const navAcerca = document.getElementById('nav-acerca');
+    const modalAcerca = document.getElementById('modal-acerca');
+    if (btnAbrirAcerca && modalAcerca) {
+        btnAbrirAcerca.addEventListener('click', () => abrirModalAcerca());
+    }
+    if (navAcerca && modalAcerca) {
+        navAcerca.addEventListener('click', () => abrirModalAcerca());
+    }
+    if (btnVolverAcerca && modalAcerca) {
+        btnVolverAcerca.addEventListener('click', () => cerrarModalAcerca());
+    }
+    if (modalAcerca) {
+        modalAcerca.addEventListener('click', (e) => {
+            if (e.target === modalAcerca) cerrarModalAcerca();
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && modalAcerca.style.display === 'flex') cerrarModalAcerca();
+        });
+    }
+
+    // VENTANA MODAL: USUARIOS REGISTRADOS
+    const navUsuarios = document.getElementById('nav-usuarios');
+    const btnVolverUsuarios = document.getElementById('btn-volver-usuarios');
+    const modalUsuarios = document.getElementById('modal-usuarios');
+    const formAgregarUsuario = document.getElementById('form-agregar-usuario');
+    if (navUsuarios && modalUsuarios) {
+        navUsuarios.addEventListener('click', () => abrirModalUsuarios());
+    }
+    if (btnVolverUsuarios && modalUsuarios) {
+        btnVolverUsuarios.addEventListener('click', () => cerrarModalUsuarios());
+    }
+    if (formAgregarUsuario) {
+        formAgregarUsuario.addEventListener('submit', manejarAgregarUsuario);
+    }
+    if (modalUsuarios) {
+        modalUsuarios.addEventListener('click', (e) => {
+            if (e.target === modalUsuarios) cerrarModalUsuarios();
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && modalUsuarios.style.display === 'flex') cerrarModalUsuarios();
+        });
+    }
+
+    // VENTANA MODAL: EDITAR PERFIL
+    const btnEditarPerfil = document.getElementById('btn-editar-perfil');
+    const btnVolverPerfil = document.getElementById('btn-volver-perfil');
+    const modalPerfil = document.getElementById('modal-perfil');
+    const formPerfil = document.getElementById('form-perfil');
+    if (btnEditarPerfil && modalPerfil) {
+        btnEditarPerfil.addEventListener('click', () => abrirModalPerfil());
+    }
+    if (btnVolverPerfil && modalPerfil) {
+        btnVolverPerfil.addEventListener('click', () => cerrarModalPerfil());
+    }
+    if (formPerfil) {
+        formPerfil.addEventListener('submit', manejarActualizarPerfil);
+    }
+    if (modalPerfil) {
+        modalPerfil.addEventListener('click', (e) => {
+            if (e.target === modalPerfil) cerrarModalPerfil();
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && modalPerfil.style.display === 'flex') cerrarModalPerfil();
+        });
+    }
+
+    // VENTANAS MODALES: OLVIDÉ MI USUARIO / CONTRASEÑA
+    const linkOlvideUsuario = document.getElementById('link-olvide-usuario');
+    const linkOlvidePassword = document.getElementById('link-olvide-password');
+    const btnVolverOlvideUsuario = document.getElementById('btn-volver-olvide-usuario');
+    const btnVolverOlvidePassword = document.getElementById('btn-volver-olvide-password');
+    const modalOlvideUsuario = document.getElementById('modal-olvide-usuario');
+    const modalOlvidePassword = document.getElementById('modal-olvide-password');
+    const formOlvideUsuario = document.getElementById('form-olvide-usuario');
+    const formOlvidePassword = document.getElementById('form-olvide-password');
+    const formNuevaPassword = document.getElementById('form-nueva-password');
+
+    if (linkOlvideUsuario && modalOlvideUsuario) {
+        linkOlvideUsuario.addEventListener('click', (e) => {
+            e.preventDefault();
+            abrirModalOlvideUsuario();
+            alert('Abriendo modal olvide usuario. display=' + modalOlvideUsuario.style.display);
+        });
+    }
+    if (btnVolverOlvideUsuario && modalOlvideUsuario) {
+        btnVolverOlvideUsuario.addEventListener('click', () => cerrarModalOlvideUsuario());
+    }
+    if (formOlvideUsuario) {
+        formOlvideUsuario.addEventListener('submit', manejarOlvideUsuario);
+    }
+    const btnCopiarUsuario = document.getElementById('btn-copiar-usuario');
+    if (btnCopiarUsuario) {
+        btnCopiarUsuario.addEventListener('click', () => {
+            const textoUsuario = document.getElementById('texto-usuario-encontrado');
+            if (!textoUsuario) return;
+            const texto = (textoUsuario.textContent || '').trim();
+            if (!texto || texto === 'No se encontró ninguna cuenta con ese correo') {
+                alert('Primero buscá tu usuario por correo.');
+                return;
+            }
+            const copiar = () => {
+                btnCopiarUsuario.textContent = '✅ Copiado';
+                setTimeout(() => { btnCopiarUsuario.textContent = '📋 Copiar'; }, 1500);
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(texto).then(copiar).catch(() => {
+                    alert('No se pudo copiar automáticamente. Tu usuario es: ' + texto);
+                });
+            } else {
+                alert('Tu usuario es: ' + texto);
+            }
+        });
+    }
+    if (modalOlvideUsuario) {
+        modalOlvideUsuario.addEventListener('click', (e) => {
+            if (e.target === modalOlvideUsuario) cerrarModalOlvideUsuario();
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && modalOlvideUsuario.style.display === 'flex') cerrarModalOlvideUsuario();
+        });
+    }
+
+    if (linkOlvidePassword && modalOlvidePassword) {
+        linkOlvidePassword.addEventListener('click', (e) => {
+            e.preventDefault();
+            abrirModalOlvidePassword();
+        });
+    }
+    if (btnVolverOlvidePassword && modalOlvidePassword) {
+        btnVolverOlvidePassword.addEventListener('click', () => cerrarModalOlvidePassword());
+    }
+    if (formOlvidePassword) {
+        formOlvidePassword.addEventListener('submit', manejarOlvidePasswordVerificacion);
+    }
+    if (formNuevaPassword) {
+        formNuevaPassword.addEventListener('submit', manejarNuevaPassword);
+    }
+    if (modalOlvidePassword) {
+        modalOlvidePassword.addEventListener('click', (e) => {
+            if (e.target === modalOlvidePassword) cerrarModalOlvidePassword();
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && modalOlvidePassword.style.display === 'flex') cerrarModalOlvidePassword();
+        });
+    }
+
+    adjuntarEventoTablaAdmin();
     
     // LISTENERS DEL PANEL ADMIN
     const filtroUBusqueda = document.getElementById('filtro-busqueda');
     const filtroEstado = document.getElementById('filtro-estado');
     const filtroUsuarios = document.getElementById('filtro-usuarios');
-    if (filtroUBusqueda) filtroUBusqueda.addEventListener('keyup', actualizarTablasAdmin);
-    if (filtroEstado) filtroEstado.addEventListener('change', actualizarTablasAdmin);
-    if (filtroUsuarios) filtroUsuarios.addEventListener('keyup', actualizarTablaUsuarios);
+    if (filtroUBusqueda) {
+        filtroUBusqueda.addEventListener('keyup', () => {
+            adminPaginaActual = 1;
+            actualizarTablasAdmin();
+        });
+    }
+    if (filtroEstado) {
+        filtroEstado.addEventListener('change', () => {
+            adminPaginaActual = 1;
+            actualizarTablasAdmin();
+        });
+    }
+    if (filtroUsuarios) {
+        filtroUsuarios.addEventListener('keyup', () => {
+            usuariosPaginaActual = 1;
+            actualizarTablaUsuarios();
+        });
+    }
     
     // Agregar estilos dinámicos
     agregarEstilosDinamicos();
@@ -298,6 +614,27 @@ async function manejarLogin(e) {
                 (u.usuario === usuarioOEmail || u.email === usuarioOEmail) && 
                 u.password === password
             );
+            
+            if (!usuario) {
+                try {
+                    const snapshotAgregados = await db.ref('usuariosAgregados').once('value');
+                    const listaAgregados = [];
+                    if (snapshotAgregados.exists()) {
+                        snapshotAgregados.forEach(child => {
+                            listaAgregados.push({ id: child.key, docId: child.key, ...child.val() });
+                            return false;
+                        });
+                    }
+                    usuariosAgregados = listaAgregados;
+                    localStorage.setItem('usuariosAgregados', JSON.stringify(usuariosAgregados));
+                    usuario = listaAgregados.find(u => 
+                        (u.usuario === usuarioOEmail || u.email === usuarioOEmail) && 
+                        u.password === password
+                    );
+                } catch (error) {
+                    console.error('Error al consultar Firebase usuariosAgregados en login:', error);
+                }
+            }
         } catch (error) {
             console.error('Error al consultar Firebase en login:', error);
         }
@@ -305,7 +642,16 @@ async function manejarLogin(e) {
     
     // RESPALDO LOCAL (si Firebase no está disponible)
     if (!usuario) {
+        usuarios = JSON.parse(localStorage.getItem('usuarios')) || [];
+        usuariosAgregados = JSON.parse(localStorage.getItem('usuariosAgregados')) || [];
         usuario = usuarios.find(u => 
+            (u.usuario === usuarioOEmail || u.email === usuarioOEmail) && 
+            u.password === password
+        );
+    }
+    
+    if (!usuario) {
+        usuario = usuariosAgregados.find(u => 
             (u.usuario === usuarioOEmail || u.email === usuarioOEmail) && 
             u.password === password
         );
@@ -417,6 +763,7 @@ async function manejarRegistro(e) {
         // Sin Firebase: guardamos solo en este dispositivo.
         usuarios.push(nuevoUsuario);
         localStorage.setItem('usuarios', JSON.stringify(usuarios));
+        console.log('Usuario guardado localmente:', nuevoUsuario.usuario, 'Total usuarios:', usuarios.length);
     }
 
     // INICIAR SESIÓN AUTOMÁTICAMENTE
@@ -436,6 +783,213 @@ function cerrarSesion() {
     }
 }
 
+function actualizarAvatar() {
+    const avatar = document.getElementById('usuario-avatar');
+    if (!avatar) return;
+    if (usuarioActual && usuarioActual.foto) {
+        avatar.src = usuarioActual.foto;
+        avatar.style.display = 'block';
+    } else {
+        avatar.src = '';
+        avatar.style.display = 'none';
+    }
+}
+
+function actualizarVisibilidadFirebase() {
+    const soloLider = document.getElementById('solo-lider');
+    const firebaseStatus = document.getElementById('firebase-status');
+    const rolInfo = document.getElementById('rol-info');
+    
+    if (!soloLider || !firebaseStatus || !rolInfo) return;
+    
+    const esLider = usuarioActual && usuarioActual.rol === 'lider';
+    const firebaseDisponible = firebaseEnabled && db;
+    
+    if (esLider && firebaseDisponible) {
+        soloLider.style.display = 'flex';
+        firebaseStatus.style.display = 'block';
+        rolInfo.style.display = 'none';
+    } else if (esLider && !firebaseDisponible) {
+        soloLider.style.display = 'flex';
+        firebaseStatus.style.display = 'block';
+        firebaseStatus.textContent = 'Firebase: no disponible';
+        firebaseStatus.style.color = '#ffd9d9';
+        rolInfo.style.display = 'none';
+    } else {
+        soloLider.style.display = 'none';
+        firebaseStatus.style.display = 'none';
+        rolInfo.style.display = 'block';
+        rolInfo.textContent = 'Rol: Ciudadano';
+        rolInfo.style.color = '#b2dfdb';
+    }
+}
+
+// ===== RECUPERACIÓN DE USUARIO Y CONTRASEÑA =====
+
+function abrirModalOlvideUsuario() {
+    const modal = document.getElementById('modal-olvide-usuario');
+    if (!modal) return;
+    document.getElementById('form-olvide-usuario').reset();
+    document.getElementById('resultado-olvide-usuario').style.display = 'none';
+    modal.style.display = 'flex';
+}
+
+function cerrarModalOlvideUsuario() {
+    const modal = document.getElementById('modal-olvide-usuario');
+    if (modal) modal.style.display = 'none';
+}
+
+async function manejarOlvideUsuario(e) {
+    e.preventDefault();
+    const email = document.getElementById('olvide-usuario-email').value.trim().toLowerCase();
+    if (!email) {
+        alert('❌ Ingresa tu correo electrónico');
+        return;
+    }
+
+    let usuarioEncontrado = null;
+    let listaCompleta = [];
+    console.log('Buscando usuario por correo:', email);
+
+    if (firebaseEnabled && db) {
+        try {
+            const snapshot = await db.ref('usuarios').once('value');
+            listaCompleta = [];
+            if (snapshot.exists()) {
+                snapshot.forEach(child => {
+                    listaCompleta.push(child.val());
+                    return false;
+                });
+            }
+            console.log('Usuarios en Firebase:', listaCompleta);
+            usuarioEncontrado = listaCompleta.find(u => u.email && u.email.toLowerCase() === email);
+        } catch (error) {
+            console.warn('Error consultando Firebase, se usa respaldo local:', error);
+        }
+    }
+
+    if (!usuarioEncontrado) {
+        usuarioEncontrado = usuarios.find(u => u.email && u.email.toLowerCase() === email);
+    }
+    if (!usuarioEncontrado) {
+        usuarioEncontrado = usuariosAgregados.find(u => u.email && u.email.toLowerCase() === email);
+    }
+    console.log('Usuario encontrado:', usuarioEncontrado);
+
+    const resultadoDiv = document.getElementById('resultado-olvide-usuario');
+    const textoUsuario = document.getElementById('texto-usuario-encontrado');
+
+    if (usuarioEncontrado) {
+        textoUsuario.textContent = usuarioEncontrado.usuario || 'Sin nombre de usuario';
+        resultadoDiv.style.display = 'block';
+    } else {
+        textoUsuario.textContent = 'No se encontró ninguna cuenta con ese correo';
+        resultadoDiv.style.display = 'block';
+    }
+}
+
+function abrirModalOlvidePassword() {
+    const modal = document.getElementById('modal-olvide-password');
+    if (!modal) return;
+    document.getElementById('form-olvide-password').reset();
+    document.getElementById('form-nueva-password').style.display = 'none';
+    modal.style.display = 'flex';
+}
+
+function cerrarModalOlvidePassword() {
+    const modal = document.getElementById('modal-olvide-password');
+    if (modal) modal.style.display = 'none';
+}
+
+async function manejarOlvidePasswordVerificacion(e) {
+    e.preventDefault();
+    const usuario = document.getElementById('olvide-password-usuario').value.trim();
+    const email = document.getElementById('olvide-password-email').value.trim().toLowerCase();
+    
+    if (!usuario || !email) {
+        alert('❌ Ingresa tu usuario y correo electrónico');
+        return;
+    }
+
+    let usuarioEncontrado = null;
+    let docId = null;
+
+    if (firebaseEnabled && db) {
+        try {
+            const snapshot = await db.ref('usuarios').once('value');
+            if (snapshot.exists()) {
+                snapshot.forEach(child => {
+                    const u = child.val();
+                    if (u && u.usuario === usuario && u.email && u.email.toLowerCase() === email) {
+                        usuarioEncontrado = u;
+                        docId = child.key;
+                    }
+                    return false;
+                });
+            }
+        } catch (error) {
+            console.warn('Error consultando Firebase:', error);
+        }
+    }
+
+    if (!usuarioEncontrado) {
+        usuarioEncontrado = usuarios.find(u => u.usuario === usuario && u.email && u.email.toLowerCase() === email);
+    }
+    if (!usuarioEncontrado) {
+        usuarioEncontrado = usuariosAgregados.find(u => u.usuario === usuario && u.email && u.email.toLowerCase() === email);
+    }
+
+    if (!usuarioEncontrado) {
+        alert('❌ No se encontró una cuenta con ese usuario y correo');
+        return;
+    }
+
+    document.getElementById('form-olvide-password').style.display = 'none';
+    document.getElementById('form-nueva-password').style.display = 'block';
+    document.getElementById('form-nueva-password').dataset.docId = docId || '';
+    document.getElementById('form-nueva-password').dataset.usuarioId = usuarioEncontrado.id || '';
+}
+
+async function manejarNuevaPassword(e) {
+    e.preventDefault();
+    const password = document.getElementById('nueva-password').value;
+    const passwordConfirm = document.getElementById('nueva-password-confirm').value;
+    const docId = document.getElementById('form-nueva-password').dataset.docId;
+    const usuarioId = document.getElementById('form-nueva-password').dataset.usuarioId;
+
+    if (!password || password.length < 4) {
+        alert('❌ La contraseña debe tener al menos 4 caracteres');
+        return;
+    }
+    if (password !== passwordConfirm) {
+        alert('❌ Las contraseñas no coinciden');
+        return;
+    }
+
+    const usuario = usuarios.find(u => String(u.id) === String(usuarioId));
+    const agregado = usuariosAgregados.find(u => String(u.id) === String(usuarioId));
+
+    if (usuario) {
+        usuario.password = password;
+        localStorage.setItem('usuarios', JSON.stringify(usuarios));
+    }
+    if (agregado) {
+        agregado.password = password;
+        localStorage.setItem('usuariosAgregados', JSON.stringify(usuariosAgregados));
+    }
+
+    if (firebaseEnabled && db && docId) {
+        try {
+            await db.ref('usuarios/' + docId).update({ password: password });
+        } catch (error) {
+            console.warn('No se pudo actualizar la contraseña en Firebase:', error);
+        }
+    }
+
+    alert('✅ Contraseña actualizada correctamente');
+    cerrarModalOlvidePassword();
+}
+
 // MOSTRAR PÁGINA PRINCIPAL
 function mostrarPaginaPrincipal() {
     const authSection = document.getElementById('auth-section');
@@ -446,26 +1000,30 @@ function mostrarPaginaPrincipal() {
     
     // ACTUALIZAR NOMBRE DE USUARIO
     document.getElementById('usuario-nombre').textContent = `👤 ${usuarioActual.nombre}`;
+    actualizarAvatar();
+    actualizarVisibilidadFirebase();
     const usuarioRolSpan = document.getElementById('usuario-rol');
     if (usuarioRolSpan) {
         usuarioRolSpan.textContent = usuarioActual.rol === 'lider' ? 'Usted es Líder Comunitario' : '';
     }
     
-    // MOSTRAR/OCULTAR PANEL ADMIN
+    // MOSTRAR/OCULTAR PANEL ADMIN Y MENU USUARIOS
     const menuAdmin = document.getElementById('menu-admin');
+    const menuUsuarios = document.getElementById('menu-usuarios');
     const adminPanel = document.getElementById('admin');
     
     if (usuarioActual.rol === 'lider') {
         menuAdmin.style.display = 'list-item';
+        menuUsuarios.style.display = 'list-item';
         if (adminPanel) {
             adminPanel.style.display = 'block';
         }
-        // Cargar datos del panel admin
         actualizarEstadisticas();
         actualizarTablasAdmin();
         actualizarTablaUsuarios();
     } else {
         menuAdmin.style.display = 'none';
+        menuUsuarios.style.display = 'none';
         if (adminPanel) {
             adminPanel.style.display = 'none';
         }
@@ -486,6 +1044,8 @@ function mostrarPaginaLogin() {
     
     authSection.style.display = 'flex';
     mainContent.style.display = 'none';
+    
+    actualizarVisibilidadFirebase();
 }
 
 // FUNCIÓN PARA SCROLL SUAVE
@@ -527,6 +1087,12 @@ function detectarUbicacion() {
             document.getElementById('lat').textContent = lat.toFixed(4);
             document.getElementById('lon').textContent = lon.toFixed(4);
             ubicacionInfo.style.display = 'block';
+            
+            if (mapaReporte && typeof L !== 'undefined') {
+                mapaReporte.setView([lat, lon], 15);
+                if (marcadorMapa) mapaReporte.removeLayer(marcadorMapa);
+                marcadorMapa = L.marker([lat, lon]).addTo(mapaReporte);
+            }
             
             // USAR NOMINATIM PARA OBTENER EL NOMBRE DEL LUGAR
             obtenerNombreLugar(lat, lon);
@@ -649,67 +1215,443 @@ async function manejarReporte(e) {
         coordenadas: {
             lat: coordenadas.lat,
             lon: coordenadas.lon
-        }
+        },
+        foto: null
     };
     
-    // VERIFICAR DUPLICADO IDÉNTICO CONTRA LA NUBE (no bloquea si falla la red)
+    const inputFoto = document.getElementById('foto');
+    if (inputFoto && inputFoto.files && inputFoto.files[0]) {
+        const reader = new FileReader();
+        reader.onload = async (ev) => {
+            nuevaSolicitud.foto = ev.target.result;
+            await guardarSolicitud(nuevaSolicitud);
+        };
+        reader.readAsDataURL(inputFoto.files[0]);
+    } else {
+        await guardarSolicitud(nuevaSolicitud);
+    }
+}
+
+async function guardarSolicitud(nuevaSolicitud) {
+    // VERIFICAR DUPLICADO IDÉNTICO (no bloquea si falla la red)
+    let listaSolicitudes = solicitudes.slice();
     if (firebaseEnabled && db) {
         try {
             const snapshot = await db.ref('solicitudes').once('value');
-            let duplicado = false;
             if (snapshot.exists()) {
                 snapshot.forEach(child => {
-                    const s = child.val();
-                    if (s &&
-                        s.usuarioId === usuarioActual.id &&
-                        s.sector === nuevaSolicitud.sector &&
-                        s.tipo === nuevaSolicitud.tipo &&
-                        s.descripcion === nuevaSolicitud.descripcion) {
-                        duplicado = true;
-                    }
+                    listaSolicitudes.push({ id: child.key, docId: child.key, ...child.val() });
                     return false;
                 });
-            }
-            if (duplicado) {
-                alert('⚠️ Ya enviaste una solicitud idéntica. No se registró de nuevo.');
-                return;
             }
         } catch (error) {
             console.warn('No se pudo verificar duplicados en Firebase, se continua:', error);
         }
     }
-
-    if (firebaseEnabled) {
-        await firebaseAgregarSolicitud(nuevaSolicitud);
-        // El listener de Firebase (on 'value') ya refleja el reporte en el array,
-        // así que NO hacemos push local para evitar duplicados.
-    } else {
-        // Sin Firebase: guardamos solo en este dispositivo.
-        solicitudes.push(nuevaSolicitud);
-        localStorage.setItem('solicitudes', JSON.stringify(solicitudes));
+    
+    const duplicado = listaSolicitudes.find(s =>
+        s.usuarioId === nuevaSolicitud.usuarioId &&
+        s.sector === nuevaSolicitud.sector &&
+        s.tipo === nuevaSolicitud.tipo &&
+        s.descripcion === nuevaSolicitud.descripcion
+    );
+    
+    if (duplicado) {
+        alert('⚠️ Ya enviaste una solicitud idéntica. No se registró de nuevo.');
+        return;
     }
     
-    // MOSTRAR MENSAJE DE ÉXITO
+    if (firebaseEnabled) {
+        await firebaseAgregarSolicitud(nuevaSolicitud);
+    } else {
+        solicitudes.push(nuevaSolicitud);
+        guardarSolicitudes();
+    }
+    
     alert('✅ ¡Solicitud registrada exitosamente!');
-    
-    // LIMPIAR FORMULARIO
+    cerrarModalReporte();
     document.getElementById('formulario-reporte').reset();
-    
-    // Restaurar nombre y email del usuario
+    document.getElementById('preview-foto').style.display = 'none';
+    document.getElementById('preview-foto').src = '';
     document.getElementById('nombre').value = usuarioActual.nombre;
     document.getElementById('email').value = usuarioActual.email;
-    
-    // ACTUALIZAR TABLA
     actualizarTabla();
-    
-    // Si es un líder, actualizar el panel admin también
     if (usuarioActual.rol === 'lider') {
         actualizarEstadisticas();
         actualizarTablasAdmin();
     }
-    
-    // SCROLL A MIS SOLICITUDES
     setTimeout(() => scrollTo('solicitudes'), 500);
+}
+
+// ABRIR / CERRAR VENTANA MODAL DE REPORTE
+function abrirModalReporte() {
+    const modal = document.getElementById('modal-reporte');
+    if (!modal) return;
+    document.getElementById('formulario-reporte').reset();
+    const previewFoto = document.getElementById('preview-foto');
+    if (previewFoto) {
+        previewFoto.src = '';
+        previewFoto.style.display = 'none';
+    }
+    document.getElementById('nombre').value = usuarioActual ? usuarioActual.nombre : '';
+    document.getElementById('email').value = usuarioActual ? usuarioActual.email : '';
+    modal.style.display = 'flex';
+    const primerCampo = document.getElementById('sector');
+    if (primerCampo) primerCampo.focus();
+
+    setTimeout(() => {
+        const contenedorMapa = document.getElementById('mapa-reporte');
+        if (!contenedorMapa || mapaReporte) return;
+        if (typeof L === 'undefined') return;
+        mapaReporte = L.map('mapa-reporte').setView([-2.170998, -79.922356], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(mapaReporte);
+        mapaReporte.on('click', function(e) {
+            if (marcadorMapa) mapaReporte.removeLayer(marcadorMapa);
+            marcadorMapa = L.marker([e.latlng.lat, e.latlng.lng]).addTo(mapaReporte);
+            coordenadas.lat = e.latlng.lat;
+            coordenadas.lon = e.latlng.lng;
+            document.getElementById('lat').textContent = e.latlng.lat.toFixed(4);
+            document.getElementById('lon').textContent = e.latlng.lng.toFixed(4);
+            document.getElementById('ubicacion-info').style.display = 'block';
+            obtenerNombreLugar(e.latlng.lat, e.latlng.lng);
+        });
+    }, 150);
+}
+
+function cerrarModalReporte() {
+    const modal = document.getElementById('modal-reporte');
+    if (modal) modal.style.display = 'none';
+    const previewFoto = document.getElementById('preview-foto');
+    if (previewFoto) {
+        previewFoto.src = '';
+        previewFoto.style.display = 'none';
+    }
+    const inputFoto = document.getElementById('foto');
+    if (inputFoto) inputFoto.value = '';
+    coordenadas.lat = null;
+    coordenadas.lon = null;
+}
+
+// ABRIR / CERRAR VENTANA MODAL DE EDITAR PERFIL
+function abrirModalPerfil() {
+    const modal = document.getElementById('modal-perfil');
+    if (!modal || !usuarioActual) return;
+    
+    document.getElementById('perfil-nombre').value = usuarioActual.nombre || '';
+    document.getElementById('perfil-usuario').value = usuarioActual.usuario || '';
+    document.getElementById('perfil-email').value = usuarioActual.email || '';
+    document.getElementById('perfil-telefono').value = usuarioActual.telefono || '';
+    document.getElementById('perfil-password').value = '';
+    
+    const previewPerfil = document.getElementById('preview-perfil-foto');
+    if (previewPerfil && usuarioActual.foto) {
+        previewPerfil.src = usuarioActual.foto;
+        previewPerfil.style.display = 'block';
+    } else if (previewPerfil) {
+        previewPerfil.src = '';
+        previewPerfil.style.display = 'none';
+    }
+    
+    modal.style.display = 'flex';
+}
+
+function cerrarModalPerfil() {
+    const modal = document.getElementById('modal-perfil');
+    if (modal) modal.style.display = 'none';
+    const previewPerfil = document.getElementById('preview-perfil-foto');
+    if (previewPerfil) {
+        previewPerfil.src = '';
+        previewPerfil.style.display = 'none';
+    }
+    const inputFotoPerfil = document.getElementById('perfil-foto');
+    if (inputFotoPerfil) inputFotoPerfil.value = '';
+}
+
+async function manejarActualizarPerfil(e) {
+    e.preventDefault();
+    if (!usuarioActual) return;
+    
+    const nombre = document.getElementById('perfil-nombre').value.trim();
+    const usuario = document.getElementById('perfil-usuario').value.trim();
+    const email = document.getElementById('perfil-email').value.trim();
+    const telefono = document.getElementById('perfil-telefono').value.trim();
+    const password = document.getElementById('perfil-password').value;
+    
+    if (!nombre || !usuario || !email) {
+        alert('❌ Nombre, usuario y correo son obligatorios');
+        return;
+    }
+    
+    const inputFotoPerfil = document.getElementById('perfil-foto');
+    const fotoFile = inputFotoPerfil && inputFotoPerfil.files && inputFotoPerfil.files[0];
+    
+    const procesarGuardado = (fotoBase64) => {
+        const datosActualizados = {
+            ...usuarioActual,
+            nombre,
+            usuario,
+            email,
+            telefono,
+            foto: fotoBase64 !== undefined ? fotoBase64 : usuarioActual.foto
+        };
+        
+        if (password && password.trim().length >= 4) {
+            datosActualizados.password = password;
+        }
+        
+        const idxUsuario = usuarios.findIndex(u => String(u.id) === String(usuarioActual.id));
+        if (idxUsuario >= 0) {
+            usuarios[idxUsuario] = { ...usuarios[idxUsuario], ...datosActualizados };
+            localStorage.setItem('usuarios', JSON.stringify(usuarios));
+        }
+        
+        const idxAgregado = usuariosAgregados.findIndex(u => String(u.id) === String(usuarioActual.id));
+        if (idxAgregado >= 0) {
+            usuariosAgregados[idxAgregado] = { ...usuariosAgregados[idxAgregado], ...datosActualizados };
+            localStorage.setItem('usuariosAgregados', JSON.stringify(usuariosAgregados));
+        }
+        
+        usuarioActual = datosActualizados;
+        localStorage.setItem('usuarioActual', JSON.stringify(usuarioActual));
+        
+        document.getElementById('usuario-nombre').textContent = `👤 ${usuarioActual.nombre}`;
+        actualizarAvatar();
+        
+        if (firebaseEnabled && db) {
+            const ref = db.ref('usuarios').child(usuarioActual.docId || usuarioActual.id);
+            const { id, docId, ...data } = usuarioActual;
+            ref.update(data).catch(err => console.warn('No se pudo actualizar en Firebase:', err));
+        }
+        
+        alert('✅ Perfil actualizado correctamente');
+        cerrarModalPerfil();
+        actualizarTabla();
+        actualizarTablaUsuarios();
+        actualizarTablasAdmin();
+    };
+    
+    if (fotoFile) {
+        const reader = new FileReader();
+        reader.onload = (ev) => procesarGuardado(ev.target.result);
+        reader.readAsDataURL(fotoFile);
+    } else {
+        procesarGuardado(usuarioActual.foto);
+    }
+}
+
+    // LISTENERS DEL PANEL ADMIN
+function abrirModalSolicitudes() {
+    const modal = document.getElementById('modal-solicitudes');
+    if (!modal) return;
+    actualizarTabla(); // refresca la tabla antes de mostrar
+    modal.style.display = 'flex';
+}
+
+function cerrarModalSolicitudes() {
+    const modal = document.getElementById('modal-solicitudes');
+    if (modal) modal.style.display = 'none';
+}
+
+// ABRIR / CERRAR VENTANA MODAL DEL PANEL ADMIN
+function abrirModalAdmin() {
+    const modal = document.getElementById('modal-admin');
+    if (!modal) return;
+    console.log('Abriendo modal admin. solicitudes.length:', solicitudes.length);
+    adminPaginaActual = 1;
+    actualizarEstadisticas();
+    actualizarTablasAdmin();
+    actualizarTablaUsuarios();
+    modal.style.display = 'flex';
+}
+
+function cerrarModalAdmin() {
+    const modal = document.getElementById('modal-admin');
+    if (modal) modal.style.display = 'none';
+}
+
+// TABS DEL PANEL ADMIN
+function initAdminTabs() {
+    const tabs = document.querySelectorAll('.admin-tab');
+    if (!tabs.length) return;
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            const target = tab.dataset.tab;
+            if (!target) return;
+            tabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            document.querySelectorAll('.admin-tab-content').forEach(content => {
+                content.classList.toggle('active', content.id === 'tab-' + target);
+            });
+        });
+    });
+}
+
+// EXPORTAR SOLICITUDES A EXCEL
+function exportarSolicitudesAExcel() {
+    if (typeof XLSX === 'undefined') {
+        alert('❌ No se pudo exportar porque la librería de Excel no está disponible.');
+        return;
+    }
+    if (!solicitudes || solicitudes.length === 0) {
+        alert('❌ No hay solicitudes para exportar.');
+        return;
+    }
+
+    const datos = solicitudes.map(s => ({
+        Fecha: s.fecha || '',
+        Usuario: s.nombre || '',
+        Sector: s.sector || '',
+        Tipo: s.tipo || '',
+        Urgencia: s.urgencia || '',
+        Estado: s.estado || '',
+        Descripcion: s.descripcion || '',
+        Latitud: s.lat || '',
+        Longitud: s.lon || ''
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(datos);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Solicitudes');
+    const fecha = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `solicitudes_${fecha}.xlsx`);
+}
+
+function exportarUsuariosAExcel() {
+    if (typeof XLSX === 'undefined') {
+        alert('❌ No se pudo exportar porque la librería de Excel no está disponible.');
+        return;
+    }
+    const lista = (usuarios || []).concat(usuariosAgregados || []);
+    if (lista.length === 0) {
+        alert('❌ No hay usuarios para exportar.');
+        return;
+    }
+
+    const datos = lista.map(u => ({
+        Nombre: u.nombre || '',
+        Usuario: u.usuario || '',
+        Correo: u.email || '',
+        Rol: u.rol === 'lider' ? 'Líder' : 'Ciudadano',
+        FechaRegistro: u.fechaRegistro || ''
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(datos);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Usuarios');
+    const fecha = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `usuarios_${fecha}.xlsx`);
+}
+
+// ABRIR / CERRAR VENTANA MODAL DE ACERCA DE
+function abrirModalAcerca() {
+    const modal = document.getElementById('modal-acerca');
+    if (modal) modal.style.display = 'flex';
+}
+
+function cerrarModalAcerca() {
+    const modal = document.getElementById('modal-acerca');
+    if (modal) modal.style.display = 'none';
+}
+
+// ABRIR / CERRAR VENTANA MODAL DE USUARIOS REGISTRADOS
+async function abrirModalUsuarios() {
+    const modal = document.getElementById('modal-usuarios');
+    if (!modal) return;
+    
+    usuarios = JSON.parse(localStorage.getItem('usuarios')) || [];
+    usuariosAgregados = JSON.parse(localStorage.getItem('usuariosAgregados')) || [];
+    
+    if (firebaseEnabled && db) {
+        try {
+            const snapshot = await db.ref('usuarios').once('value');
+            if (snapshot.exists()) {
+                usuarios = [];
+                snapshot.forEach(child => {
+                    usuarios.push({ id: child.key, docId: child.key, ...child.val() });
+                    return false;
+                });
+                localStorage.setItem('usuarios', JSON.stringify(usuarios));
+            }
+        } catch (error) {
+            console.error('Error al cargar usuarios desde Firebase:', error);
+        }
+    }
+    
+    actualizarTablaUsuarios();
+    modal.style.display = 'flex';
+}
+
+function cerrarModalUsuarios() {
+    const modal = document.getElementById('modal-usuarios');
+    if (modal) modal.style.display = 'none';
+}
+
+// AGREGAR NUEVO USUARIO
+async function manejarAgregarUsuario(e) {
+    e.preventDefault();
+    
+    const nombre = document.getElementById('agregar-nombre').value.trim();
+    const usuario = document.getElementById('agregar-usuario').value.trim();
+    const email = document.getElementById('agregar-email').value.trim();
+    const password = document.getElementById('agregar-password').value;
+    const rol = document.getElementById('agregar-rol').value;
+    
+    if (!nombre || !usuario || !email || !password) {
+        alert('❌ Por favor completa todos los campos');
+        return;
+    }
+    
+    if (usuario.length < 3) {
+        alert('❌ El usuario debe tener al menos 3 caracteres');
+        return;
+    }
+    
+    if (password.length < 4) {
+        alert('❌ La contraseña debe tener al menos 4 caracteres');
+        return;
+    }
+    
+    const existeUsuario = usuarios.find(u => u.usuario === usuario);
+    const existeEmail = usuarios.find(u => u.email === email);
+    const existeAgregado = usuariosAgregados.find(u => u.usuario === usuario || u.email === email);
+    
+    if (existeUsuario || existeAgregado) {
+        alert('❌ Este nombre de usuario ya está registrado');
+        return;
+    }
+    if (existeEmail || existeAgregado) {
+        alert('❌ Este correo ya está registrado');
+        return;
+    }
+    
+    const nuevoUsuario = {
+        id: Date.now(),
+        nombre: nombre,
+        usuario: usuario,
+        email: email,
+        password: password,
+        rol: rol,
+        fechaRegistro: new Date().toLocaleDateString('es-ES'),
+        agregadoPor: usuarioActual ? usuarioActual.usuario : 'admin'
+    };
+    
+    usuariosAgregados.push(nuevoUsuario);
+    localStorage.setItem('usuariosAgregados', JSON.stringify(usuariosAgregados));
+    
+    if (firebaseEnabled && db) {
+        try {
+            const ref = db.ref('usuariosAgregados').push();
+            await ref.set(nuevoUsuario);
+        } catch (error) {
+            console.warn('No se pudo sincronizar con Firebase:', error);
+        }
+    }
+    
+    alert('✅ Usuario agregado exitosamente');
+    document.getElementById('form-agregar-usuario').reset();
+    actualizarTablaUsuarios();
 }
 
 // FUNCIÓN PARA ACTUALIZAR LA TABLA
@@ -737,9 +1679,33 @@ function actualizarTabla() {
         const tdTipo = document.createElement('td'); tdTipo.textContent = sol.tipo; tr.appendChild(tdTipo);
         const tdSector = document.createElement('td'); tdSector.textContent = sol.sector; tr.appendChild(tdSector);
         const tdEstado = document.createElement('td');
-        const spanEstado = document.createElement('span'); spanEstado.className = 'estado'; spanEstado.textContent = sol.estado; tdEstado.appendChild(spanEstado); tr.appendChild(tdEstado);
+        const spanEstado = document.createElement('span');
+        const estadoClase = sol.estado === 'Aprobada' ? 'badge badge-success' : sol.estado === 'En proceso' ? 'badge badge-warning' : sol.estado === 'Completada' ? 'badge badge-purple' : 'badge badge-info';
+        spanEstado.className = estadoClase;
+        spanEstado.textContent = sol.estado;
+        tdEstado.appendChild(spanEstado);
+        tr.appendChild(tdEstado);
         const tdUrg = document.createElement('td');
         const spanUrg = document.createElement('span'); spanUrg.className = `urgencia-${sol.urgencia}`; spanUrg.textContent = sol.urgencia.toUpperCase(); tdUrg.appendChild(spanUrg); tr.appendChild(tdUrg);
+        const tdImagen = document.createElement('td');
+        if (sol.foto) {
+            const img = document.createElement('img');
+            img.src = sol.foto;
+            img.alt = 'Foto de la necesidad';
+            img.style.maxWidth = '60px';
+            img.style.maxHeight = '60px';
+            img.style.borderRadius = '6px';
+            img.style.cursor = 'pointer';
+            img.title = 'Ver imagen';
+            img.addEventListener('click', () => {
+                const win = window.open();
+                win.document.write(`<img src="${sol.foto}" style="max-width:100%;">`);
+            });
+            tdImagen.appendChild(img);
+        } else {
+            tdImagen.textContent = '-';
+        }
+        tr.appendChild(tdImagen);
 
         tablaCuerpo.appendChild(tr);
     });
@@ -748,7 +1714,7 @@ function actualizarTabla() {
 function createEmptyRow(message) {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
-    td.colSpan = 5;
+    td.colSpan = 6;
     td.style.textAlign = 'center';
     td.style.color = '#999';
     td.textContent = message;
@@ -771,14 +1737,18 @@ function actualizarEstadisticas() {
 
 // ACTUALIZAR TABLAS DEL PANEL ADMIN
 function actualizarTablasAdmin() {
+    console.log('actualizarTablasAdmin llamada. solicitudes.length:', solicitudes.length);
     const tabla = document.getElementById('tabla-admin-cuerpo');
+    if (!tabla) {
+        console.log('actualizarTablasAdmin: tabla no encontrada');
+        return;
+    }
     tabla.innerHTML = '';
     const busqueda = document.getElementById('filtro-busqueda')?.value.toLowerCase() || '';
     const filtroEstado = document.getElementById('filtro-estado')?.value || '';
 
     let solicitudesFiltradas = solicitudes.slice();
 
-    // Filtrar por búsqueda
     if (busqueda) {
         solicitudesFiltradas = solicitudesFiltradas.filter(s =>
             (s.sector || '').toLowerCase().includes(busqueda) ||
@@ -786,21 +1756,32 @@ function actualizarTablasAdmin() {
         );
     }
 
-    // Filtrar por estado
     if (filtroEstado) {
         solicitudesFiltradas = solicitudesFiltradas.filter(s => s.estado === filtroEstado);
     }
 
-    if (solicitudesFiltradas.length === 0) {
+    adminSolicitudesFiltradas = solicitudesFiltradas;
+
+    const totalPaginas = Math.max(1, Math.ceil(adminSolicitudesFiltradas.length / adminRegistrosPorPagina));
+    if (adminPaginaActual > totalPaginas) {
+        adminPaginaActual = totalPaginas;
+    }
+    const inicio = (adminPaginaActual - 1) * adminRegistrosPorPagina;
+    const solicitudesPaginadas = adminSolicitudesFiltradas.slice(inicio, inicio + adminRegistrosPorPagina);
+
+    if (solicitudesPaginadas.length === 0) {
         const tr = document.createElement('tr');
         const td = document.createElement('td');
-        td.colSpan = 7; td.style.textAlign = 'center'; td.style.color = '#999'; td.textContent = 'No hay solicitudes';
+        td.colSpan = 8; td.style.textAlign = 'center'; td.style.color = '#999'; td.textContent = 'No hay solicitudes';
         tr.appendChild(td);
         tabla.appendChild(tr);
+        console.log('Tabla admin: sin solicitudes filtradas');
+        actualizarPaginacionAdmin(totalPaginas);
         return;
     }
 
-    solicitudesFiltradas.forEach(sol => {
+    console.log('Tabla admin: renderizando', solicitudesPaginadas.length, 'filas de', adminSolicitudesFiltradas.length);
+    solicitudesPaginadas.forEach(sol => {
         const tr = document.createElement('tr');
 
         const tdFecha = document.createElement('td'); tdFecha.textContent = sol.fecha; tr.appendChild(tdFecha);
@@ -808,17 +1789,101 @@ function actualizarTablasAdmin() {
         const tdSector = document.createElement('td'); tdSector.textContent = sol.sector; tr.appendChild(tdSector);
         const tdTipo = document.createElement('td'); tdTipo.textContent = sol.tipo; tr.appendChild(tdTipo);
         const tdUrg = document.createElement('td'); const spanUrg = document.createElement('span'); spanUrg.className = `urgencia-${sol.urgencia}`; spanUrg.textContent = sol.urgencia.toUpperCase(); tdUrg.appendChild(spanUrg); tr.appendChild(tdUrg);
-        const tdEstado = document.createElement('td'); tdEstado.textContent = sol.estado; tr.appendChild(tdEstado);
+        const tdEstado = document.createElement('td');
+        const spanEstado = document.createElement('span');
+        const estadoClaseAdmin = sol.estado === 'Aprobada' ? 'badge badge-success' : sol.estado === 'En proceso' ? 'badge badge-warning' : sol.estado === 'Completada' ? 'badge badge-purple' : 'badge badge-info';
+        spanEstado.className = estadoClaseAdmin;
+        spanEstado.textContent = sol.estado;
+        tdEstado.appendChild(spanEstado);
+        tr.appendChild(tdEstado);
+        const tdImagen = document.createElement('td');
+        if (sol.foto) {
+            const img = document.createElement('img');
+            img.src = sol.foto;
+            img.alt = 'Foto de la necesidad';
+            img.style.maxWidth = '50px';
+            img.style.maxHeight = '50px';
+            img.style.borderRadius = '6px';
+            img.style.cursor = 'pointer';
+            img.title = 'Ver imagen';
+            img.addEventListener('click', () => {
+                const win = window.open();
+                win.document.write(`<img src="${sol.foto}" style="max-width:100%;">`);
+            });
+            tdImagen.appendChild(img);
+        } else {
+            tdImagen.textContent = '-';
+        }
+        tr.appendChild(tdImagen);
         const tdAcc = document.createElement('td');
 
         const select = document.createElement('select'); select.className = 'btn-cambiar-estado';
         const opt0 = document.createElement('option'); opt0.value = ''; opt0.textContent = '-- Cambiar --'; select.appendChild(opt0);
-        ['En revisión','Aprobada','En proceso','Completada'].forEach(val => { const o = document.createElement('option'); o.value = val; o.textContent = val; select.appendChild(o); });
-        select.addEventListener('change', function() { cambiarEstadoSolicitud(sol.id, this.value); });
+        const estados = ['En revisión','Aprobada','En proceso','Completada'];
+        estados.forEach(val => { const o = document.createElement('option'); o.value = val; o.textContent = val; select.appendChild(o); });
+        select.addEventListener('change', function() {
+            console.log('Cambio estado directo:', sol.id, this.value);
+            cambiarEstadoSolicitud(sol.id, this.value);
+        });
         tdAcc.appendChild(select);
         tr.appendChild(tdAcc);
 
         tabla.appendChild(tr);
+    });
+
+    actualizarPaginacionAdmin(totalPaginas);
+}
+
+function actualizarPaginacionAdmin(totalPaginas) {
+    const contenedor = document.getElementById('admin-paginacion');
+    if (!contenedor) return;
+    contenedor.innerHTML = '';
+
+    if (totalPaginas <= 1) return;
+
+    const btnAnterior = document.createElement('button');
+    btnAnterior.textContent = '← Anterior';
+    btnAnterior.disabled = adminPaginaActual === 1;
+    btnAnterior.addEventListener('click', () => {
+        if (adminPaginaActual > 1) {
+            adminPaginaActual--;
+            actualizarTablasAdmin();
+        }
+    });
+    contenedor.appendChild(btnAnterior);
+
+    const info = document.createElement('span');
+    info.className = 'admin-paginacion-info';
+    info.textContent = `Página ${adminPaginaActual} de ${totalPaginas}`;
+    contenedor.appendChild(info);
+
+    const btnSiguiente = document.createElement('button');
+    btnSiguiente.textContent = 'Siguiente →';
+    btnSiguiente.disabled = adminPaginaActual === totalPaginas;
+    btnSiguiente.addEventListener('click', () => {
+        if (adminPaginaActual < totalPaginas) {
+            adminPaginaActual++;
+            actualizarTablasAdmin();
+        }
+    });
+    contenedor.appendChild(btnSiguiente);
+}
+
+function adjuntarEventoTablaAdmin() {
+    const tabla = document.getElementById('tabla-admin-cuerpo');
+    if (!tabla) return;
+    tabla.addEventListener('change', (e) => {
+        try {
+            if (e.target && e.target.classList.contains('btn-cambiar-estado')) {
+                const solicitudId = Number(e.target.dataset.solicitudId);
+                const nuevoEstado = e.target.value;
+                if (!solicitudId || !nuevoEstado) return;
+                cambiarEstadoSolicitud(solicitudId, nuevoEstado);
+            }
+        } catch (error) {
+            console.error('Error en event delegation tabla admin:', error);
+            alert('❌ Error al actualizar el estado: ' + (error && error.message ? error.message : error));
+        }
     });
 }
 
@@ -827,9 +1892,10 @@ function actualizarTablaUsuarios() {
     const tabla = document.getElementById('tabla-usuarios-cuerpo');
     if (!tabla) return;
     tabla.innerHTML = '';
+    console.log('Actualizando tabla de usuarios. Total usuarios:', usuarios.length, 'Total agregados:', usuariosAgregados.length);
 
     const busqueda = document.getElementById('filtro-usuarios')?.value.toLowerCase() || '';
-    let lista = usuarios.slice();
+    let lista = usuarios.slice().concat(usuariosAgregados.slice());
 
     if (busqueda) {
         lista = lista.filter(u =>
@@ -839,19 +1905,29 @@ function actualizarTablaUsuarios() {
         );
     }
 
-    if (lista.length === 0) {
+    usuariosListaFiltrada = lista;
+
+    const totalPaginas = Math.max(1, Math.ceil(usuariosListaFiltrada.length / usuariosRegistrosPorPagina));
+    if (usuariosPaginaActual > totalPaginas) {
+        usuariosPaginaActual = totalPaginas;
+    }
+    const inicio = (usuariosPaginaActual - 1) * usuariosRegistrosPorPagina;
+    const usuariosPaginados = usuariosListaFiltrada.slice(inicio, inicio + usuariosRegistrosPorPagina);
+
+    if (usuariosPaginados.length === 0) {
         const tr = document.createElement('tr');
         const td = document.createElement('td');
-        td.colSpan = 5;
+        td.colSpan = 6;
         td.style.textAlign = 'center';
         td.style.color = '#999';
-        td.textContent = usuarios.length === 0 ? 'No hay usuarios registrados' : 'Sin coincidencias';
+        td.textContent = usuariosListaFiltrada.length === 0 ? 'No hay usuarios registrados' : 'Sin coincidencias';
         tr.appendChild(td);
         tabla.appendChild(tr);
+        actualizarPaginacionUsuarios(totalPaginas);
         return;
     }
 
-    lista.forEach(u => {
+    usuariosPaginados.forEach(u => {
         const tr = document.createElement('tr');
 
         const tdNombre = document.createElement('td'); tdNombre.textContent = u.nombre || '-'; tr.appendChild(tdNombre);
@@ -865,27 +1941,149 @@ function actualizarTablaUsuarios() {
         tdRol.appendChild(spanRol);
         tr.appendChild(tdRol);
         const tdFecha = document.createElement('td'); tdFecha.textContent = u.fechaRegistro || '-'; tr.appendChild(tdFecha);
+        
+        const tdAcciones = document.createElement('td');
+        const selectRol = document.createElement('select');
+        selectRol.className = 'btn-cambiar-estado';
+        const optLider = document.createElement('option');
+        optLider.value = 'lider';
+        optLider.textContent = 'Líder';
+        const optCiudadano = document.createElement('option');
+        optCiudadano.value = 'ciudadano';
+        optCiudadano.textContent = 'Ciudadano';
+        selectRol.appendChild(optLider);
+        selectRol.appendChild(optCiudadano);
+        selectRol.value = u.rol || 'ciudadano';
+        selectRol.addEventListener('change', function() {
+            cambiarRolUsuario(u, this.value);
+        });
+        tdAcciones.appendChild(selectRol);
+        tr.appendChild(tdAcciones);
 
         tabla.appendChild(tr);
     });
+
+    actualizarPaginacionUsuarios(totalPaginas);
+}
+
+function actualizarPaginacionUsuarios(totalPaginas) {
+    const contenedor = document.getElementById('usuarios-paginacion');
+    if (!contenedor) return;
+    contenedor.innerHTML = '';
+
+    if (totalPaginas <= 1) return;
+
+    const btnAnterior = document.createElement('button');
+    btnAnterior.textContent = '← Anterior';
+    btnAnterior.disabled = usuariosPaginaActual === 1;
+    btnAnterior.addEventListener('click', () => {
+        if (usuariosPaginaActual > 1) {
+            usuariosPaginaActual--;
+            actualizarTablaUsuarios();
+        }
+    });
+    contenedor.appendChild(btnAnterior);
+
+    const info = document.createElement('span');
+    info.className = 'admin-paginacion-info';
+    info.textContent = `Página ${usuariosPaginaActual} de ${totalPaginas}`;
+    contenedor.appendChild(info);
+
+    const btnSiguiente = document.createElement('button');
+    btnSiguiente.textContent = 'Siguiente →';
+    btnSiguiente.disabled = usuariosPaginaActual === totalPaginas;
+    btnSiguiente.addEventListener('click', () => {
+        if (usuariosPaginaActual < totalPaginas) {
+            usuariosPaginaActual++;
+            actualizarTablaUsuarios();
+        }
+    });
+    contenedor.appendChild(btnSiguiente);
+}
+
+async function cambiarRolUsuario(usuario, nuevoRol) {
+    if (!usuario || !nuevoRol) return;
+    
+    usuario.rol = nuevoRol;
+    
+    const idxUsuarios = usuarios.findIndex(u => String(u.id) === String(usuario.id));
+    if (idxUsuarios >= 0) {
+        usuarios[idxUsuarios].rol = nuevoRol;
+        localStorage.setItem('usuarios', JSON.stringify(usuarios));
+    }
+    
+    const idxAgregados = usuariosAgregados.findIndex(u => String(u.id) === String(usuario.id));
+    if (idxAgregados >= 0) {
+        usuariosAgregados[idxAgregados].rol = nuevoRol;
+        localStorage.setItem('usuariosAgregados', JSON.stringify(usuariosAgregados));
+    }
+    
+    if (firebaseEnabled && db && usuario.docId) {
+        try {
+            await db.ref('usuarios/' + usuario.docId).update({ rol: nuevoRol });
+        } catch (error) {
+            console.warn('No se pudo actualizar el rol en Firebase:', error);
+        }
+    }
+    
+    if (usuarioActual && String(usuarioActual.id) === String(usuario.id)) {
+        usuarioActual.rol = nuevoRol;
+        localStorage.setItem('usuarioActual', JSON.stringify(usuarioActual));
+        const usuarioRolSpan = document.getElementById('usuario-rol');
+        if (usuarioRolSpan) {
+            usuarioRolSpan.textContent = nuevoRol === 'lider' ? 'Usted es Líder Comunitario' : '';
+        }
+        actualizarVisibilidadFirebase();
+    }
+    
+    actualizarTablaUsuarios();
+    actualizarTablasAdmin();
+    alert('✅ Rol actualizado correctamente');
 }
 
 // CAMBIAR ESTADO DE SOLICITUD (SOLO LÍDERES)
-function cambiarEstadoSolicitud(solicitudId, nuevoEstado) {
+async function cambiarEstadoSolicitud(solicitudId, nuevoEstado) {
     if (!nuevoEstado) return;
-    
-    const solicitud = solicitudes.find(s => s.id === solicitudId);
-    if (solicitud) {
-        solicitud.estado = nuevoEstado;
-        localStorage.setItem('solicitudes', JSON.stringify(solicitudes));
-        if (firebaseEnabled && solicitud.docId) {
-            db.ref('solicitudes/' + solicitud.docId).update({ estado: nuevoEstado })
-                .catch(error => console.error('Error actualizando estado en Firebase:', error));
+
+    const idNum = Number(solicitudId);
+    let solicitud = solicitudes.find(s => Number(s.id) === idNum || String(s.id) === String(solicitudId));
+    console.log('Cambiar estado:', solicitudId, nuevoEstado, 'encontrada:', !!solicitud);
+    if (!solicitud) {
+        if (firebaseEnabled && db) {
+            try {
+                const snapshot = await db.ref('solicitudes').once('value');
+                const lista = [];
+                if (snapshot.exists()) {
+                    snapshot.forEach(child => {
+                        lista.push({ id: child.key, docId: child.key, ...child.val() });
+                        return false;
+                    });
+                }
+                solicitudes = lista;
+                guardarSolicitudes();
+                solicitud = solicitudes.find(s => Number(s.id) === idNum || String(s.id) === String(solicitudId));
+                console.log('Solicitud recargada desde Firebase:', !!solicitud, 'total:', solicitudes.length);
+            } catch (error) {
+                console.error('Error al recargar solicitudes desde Firebase:', error);
+            }
         }
-        actualizarEstadisticas();
-        actualizarTablasAdmin();
-        alert('✅ Estado actualizado correctamente');
     }
+
+    if (!solicitud) {
+        alert('❌ No se encontró la solicitud');
+        return;
+    }
+
+    solicitud.estado = nuevoEstado;
+    guardarSolicitudes();
+    if (firebaseEnabled && db && solicitud.docId) {
+        await db.ref('solicitudes/' + solicitud.docId).update({ estado: nuevoEstado })
+            .catch(error => console.error('Error actualizando estado en Firebase:', error));
+    }
+    adminPaginaActual = 1;
+    actualizarEstadisticas();
+    actualizarTablasAdmin();
+    alert('✅ Estado actualizado correctamente');
 }
 
 // INICIALIZAR AL CARGAR LA PÁGINA
@@ -905,9 +2103,9 @@ function agregarEstilosDinamicos() {
         }
         
         .urgencia-baja {
-            color: #007700;
+            color: #0077a8;
             font-weight: 700;
-            background: #e8f5e9;
+            background: #eef9fd;
             padding: 4px 8px;
             border-radius: 3px;
         }
