@@ -1046,6 +1046,8 @@ table tbody tr:hover {
 #tabla-admin {
     width: 100%;
     font-size: 12px;
+    table-layout: auto;
+    min-width: 900px;
 }
 
 #tabla-admin thead {
@@ -1058,6 +1060,7 @@ table tbody tr:hover {
     text-align: left;
     font-weight: 600;
     font-size: 12px;
+    white-space: nowrap;
 }
 
 #tabla-admin td {
@@ -1066,7 +1069,34 @@ table tbody tr:hover {
     color: #000;
     font-weight: 500;
     font-size: 12px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
+
+#tabla-admin td:last-child {
+    white-space: nowrap;
+}
+
+#tabla-admin select.btn-cambiar-estado {
+    font-size: 11px;
+    padding: 5px 22px 5px 8px;
+    margin-right: 6px;
+    max-width: 130px;
+}
+
+#tabla-admin .btn-eliminar-solicitud {
+    padding: 5px 8px;
+    font-size: 12px;
+}
+
+#tabla-admin th:nth-child(1) { width: auto; }
+#tabla-admin th:nth-child(2) { width: auto; }
+#tabla-admin th:nth-child(3) { width: auto; }
+#tabla-admin th:nth-child(4) { width: auto; }
+#tabla-admin th:nth-child(5) { width: auto; }
+#tabla-admin th:nth-child(6) { width: auto; }
+#tabla-admin th:nth-child(7) { width: auto; }
+#tabla-admin th:nth-child(8) { width: auto; }
 
 #tabla-usuarios {
     width: 100%;
@@ -1228,10 +1258,19 @@ table tbody tr:hover {
 
 #tabla-admin tbody tr {
     transition: background 0.2s;
+    display: table-row;
 }
 
 #tabla-admin tbody tr:hover {
     background: #faf5fb;
+}
+
+#tabla-admin tbody {
+    display: table-row-group;
+}
+
+#tabla-admin td {
+    display: table-cell;
 }
 
 .btn-cambiar-estado {
@@ -1248,6 +1287,59 @@ table tbody tr:hover {
 
 .btn-cambiar-estado:hover {
     background: #ffb300;
+}
+
+.btn-eliminar-solicitud {
+    padding: 6px 10px;
+    background: #dc3545;
+    color: #fff;
+    border: none;
+    border-radius: 50px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-weight: 600;
+    transition: background 0.3s;
+}
+
+.btn-eliminar-solicitud:hover {
+    background: #c82333;
+}
+
+.lista-eliminados {
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 10px;
+}
+
+.registro-eliminado-item {
+    background: #fff5f5;
+    border: 1px solid #f5c6cb;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 10px;
+}
+
+.registro-eliminado-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.fecha-eliminado {
+    font-size: 0.85rem;
+    color: #721c24;
+    font-weight: 600;
+}
+
+.registro-eliminado-body p {
+    margin: 4px 0;
+    font-size: 0.9rem;
+    color: #333;
+}
+
+.registro-eliminado-body strong {
+    color: #721c24;
 }
 
 /* Selector de rol en tabla de usuarios */

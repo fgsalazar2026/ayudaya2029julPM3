@@ -18,6 +18,7 @@ let usuariosPaginaActual = 1;
 const usuariosRegistrosPorPagina = 8;
 let usuariosListaFiltrada = [];
 
+let solicitudesEliminadas = JSON.parse(localStorage.getItem('solicitudesEliminadas')) || [];
 let donaciones = JSON.parse(localStorage.getItem('donaciones')) || [];
 let donacionesPaginaActual = 1;
 const donacionesRegistrosPorPagina = 8;
@@ -53,6 +54,14 @@ function guardarSolicitudes() {
         } else {
             console.error('Error al guardar solicitudes:', error);
         }
+    }
+}
+
+function guardarSolicitudesEliminadas() {
+    try {
+        localStorage.setItem('solicitudesEliminadas', JSON.stringify(solicitudesEliminadas));
+    } catch (error) {
+        console.error('Error al guardar solicitudes eliminadas:', error);
     }
 }
 
@@ -391,6 +400,10 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
     if (btnExportarUsuariosExcel) {
         btnExportarUsuariosExcel.addEventListener('click', exportarUsuariosAExcel);
+    }
+    const btnExportarEliminadosExcel = document.getElementById('btn-exportar-eliminados-excel');
+    if (btnExportarEliminadosExcel) {
+        btnExportarEliminadosExcel.addEventListener('click', exportarEliminadosAExcel);
     }
     if (modalAdmin) {
         modalAdmin.addEventListener('click', (e) => {
@@ -1606,6 +1619,16 @@ function abrirModalAdmin() {
     actualizarTablaUsuarios();
     actualizarEstadisticasDonaciones();
     actualizarTablaDonaciones();
+    
+    const tabs = document.querySelectorAll('.admin-tab');
+    const contents = document.querySelectorAll('.admin-tab-content');
+    tabs.forEach(t => t.classList.remove('active'));
+    contents.forEach(c => c.classList.remove('active'));
+    const tabSolicitudes = document.querySelector('.admin-tab[data-tab="solicitudes"]');
+    const contentSolicitudes = document.getElementById('tab-solicitudes');
+    if (tabSolicitudes) tabSolicitudes.classList.add('active');
+    if (contentSolicitudes) contentSolicitudes.classList.add('active');
+    
     modal.style.display = 'flex';
 }
 
@@ -1960,8 +1983,34 @@ function initAdminTabs() {
             tabs.forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
             document.querySelectorAll('.admin-tab-content').forEach(content => {
-                content.classList.toggle('active', content.id === 'tab-' + target);
+                const isTarget = content.id === 'tab-' + target;
+                content.classList.toggle('active', isTarget);
+                content.style.display = isTarget ? 'block' : 'none';
             });
+            if (target === 'eliminados') {
+                mostrarRegistrosEliminados();
+            } else if (target === 'solicitudes') {
+                const tabla = document.getElementById('tabla-admin-cuerpo');
+                const contenedorEliminados = document.getElementById('contenedor-eliminados');
+                if (tabla) {
+                    tabla.style.display = '';
+                    tabla.style.visibility = 'visible';
+                }
+                if (contenedorEliminados) {
+                    contenedorEliminados.style.display = 'none';
+                    contenedorEliminados.innerHTML = '';
+                }
+                const titulo = document.getElementById('titulo-seccion-admin');
+                if (titulo) titulo.textContent = 'Solicitudes';
+                adminPaginaActual = 1;
+                actualizarTablasAdmin();
+            } else if (target === 'donaciones') {
+                actualizarEstadisticasDonaciones();
+                actualizarTablaDonaciones();
+            } else if (target === 'usuarios') {
+                usuariosPaginaActual = 1;
+                actualizarTablaUsuarios();
+            }
         });
     });
 }
@@ -2011,6 +2060,35 @@ function exportarSolicitudesAExcel() {
     XLSX.utils.book_append_sheet(wb, ws, 'Solicitudes');
     const fecha = new Date().toISOString().slice(0, 10);
     XLSX.writeFile(wb, `solicitudes_${fecha}.xlsx`);
+}
+
+function exportarEliminadosAExcel() {
+    if (typeof XLSX === 'undefined') {
+        alert('❌ No se pudo exportar porque la librería de Excel no está disponible.');
+        return;
+    }
+    if (!solicitudesEliminadas || solicitudesEliminadas.length === 0) {
+        alert('❌ No hay registros eliminados para exportar.');
+        return;
+    }
+
+    const datos = solicitudesEliminadas.map(e => ({
+        FechaOriginal: e.fecha || '',
+        Usuario: e.nombre || '',
+        Sector: e.sector || '',
+        Tipo: e.tipo || '',
+        Urgencia: e.urgencia || '',
+        Estado: e.estado || '',
+        FechaEliminacion: e.fechaEliminacion || '',
+        EliminadoPor: e.eliminadoPor || '',
+        Motivo: e.motivo || ''
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(datos);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Eliminados');
+    const fecha = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `registros_eliminados_${fecha}.xlsx`);
 }
 
 function exportarUsuariosAExcel() {
@@ -2073,6 +2151,32 @@ function abrirModalDonar() {
 function cerrarModalDonar() {
     const modal = document.getElementById('modal-donar');
     if (modal) modal.style.display = 'none';
+}
+
+function eliminarSolicitud(solicitudId) {
+    const solicitud = solicitudes.find(s => Number(s.id) === Number(solicitudId));
+    if (!solicitud) {
+        alert('❌ No se encontró la solicitud');
+        return;
+    }
+
+    const motivo = prompt('Motivo de eliminación (opcional):', 'Solicitud eliminada por el administrador');
+    if (motivo === null) return;
+
+    solicitudesEliminadas.push({
+        ...solicitud,
+        fechaEliminacion: new Date().toLocaleDateString('es-ES'),
+        eliminadoPor: usuarioActual ? usuarioActual.nombre : 'Desconocido',
+        motivo: motivo || 'Sin motivo'
+    });
+    guardarSolicitudesEliminadas();
+
+    solicitudes = solicitudes.filter(s => Number(s.id) !== Number(solicitudId));
+    guardarSolicitudes();
+
+    actualizarEstadisticas();
+    actualizarTablasAdmin();
+    alert('✅ Registro eliminado correctamente');
 }
 
 function abrirModalMisDonaciones() {
@@ -2479,11 +2583,46 @@ function actualizarEstadisticas() {
 // ACTUALIZAR TABLAS DEL PANEL ADMIN
 function actualizarTablasAdmin() {
     console.log('actualizarTablasAdmin llamada. solicitudes.length:', solicitudes.length);
+    const tabSolicitudes = document.getElementById('tab-solicitudes');
+    const tabEliminados = document.getElementById('tab-eliminados');
+    const tabDonaciones = document.getElementById('tab-donaciones');
+    const tabUsuarios = document.getElementById('tab-usuarios');
+
+    if (tabSolicitudes) {
+        tabSolicitudes.classList.add('active');
+        tabSolicitudes.style.display = 'block';
+    }
+    if (tabEliminados) {
+        tabEliminados.classList.remove('active');
+        tabEliminados.style.display = 'none';
+    }
+    if (tabDonaciones) {
+        tabDonaciones.classList.remove('active');
+        tabDonaciones.style.display = 'none';
+    }
+    if (tabUsuarios) {
+        tabUsuarios.classList.remove('active');
+        tabUsuarios.style.display = 'none';
+    }
+
     const tabla = document.getElementById('tabla-admin-cuerpo');
-    if (!tabla) {
-        console.log('actualizarTablasAdmin: tabla no encontrada');
+    const contenedorEliminados = document.getElementById('contenedor-eliminados');
+    if (!tabla || !contenedorEliminados) {
+        console.log('actualizarTablasAdmin: tabla o contenedor eliminados no encontrado');
         return;
     }
+
+    if (tabla) {
+        tabla.style.display = '';
+        tabla.style.visibility = 'visible';
+    }
+    if (contenedorEliminados) {
+        contenedorEliminados.style.display = 'none';
+    }
+
+    const titulo = document.getElementById('titulo-seccion-admin');
+    if (titulo) titulo.textContent = 'Solicitudes';
+
     tabla.innerHTML = '';
     const busqueda = document.getElementById('filtro-busqueda')?.value.toLowerCase() || '';
     const filtroEstado = document.getElementById('filtro-estado')?.value || '';
@@ -2557,6 +2696,7 @@ function actualizarTablasAdmin() {
         }
         tr.appendChild(tdImagen);
         const tdAcc = document.createElement('td');
+        tdAcc.style.whiteSpace = 'nowrap';
 
         const select = document.createElement('select'); select.className = 'btn-cambiar-estado';
         const opt0 = document.createElement('option'); opt0.value = ''; opt0.textContent = '-- Cambiar --'; select.appendChild(opt0);
@@ -2567,8 +2707,19 @@ function actualizarTablasAdmin() {
             cambiarEstadoSolicitud(sol.id, this.value);
         });
         tdAcc.appendChild(select);
-        tr.appendChild(tdAcc);
 
+        const btnEliminar = document.createElement('button');
+        btnEliminar.textContent = '🗑';
+        btnEliminar.className = 'btn-eliminar-solicitud';
+        btnEliminar.title = 'Eliminar registro';
+        btnEliminar.addEventListener('click', () => {
+            if (confirm('¿Estás seguro de que querés eliminar este registro?')) {
+                eliminarSolicitud(sol.id);
+            }
+        });
+        tdAcc.appendChild(btnEliminar);
+
+        tr.appendChild(tdAcc);
         tabla.appendChild(tr);
     });
 
@@ -2625,6 +2776,54 @@ function adjuntarEventoTablaAdmin() {
             console.error('Error en event delegation tabla admin:', error);
             alert('❌ Error al actualizar el estado: ' + (error && error.message ? error.message : error));
         }
+    });
+}
+
+function mostrarRegistrosEliminados() {
+    const tabla = document.getElementById('tabla-admin-cuerpo');
+    const contenedorEliminados = document.getElementById('contenedor-eliminados');
+    if (!tabla || !contenedorEliminados) return;
+
+    const tabSolicitudes = document.getElementById('tab-solicitudes');
+    const tabEliminados = document.getElementById('tab-eliminados');
+    if (tabSolicitudes) tabSolicitudes.classList.remove('active');
+    if (tabEliminados) tabEliminados.classList.add('active');
+
+    const titulo = document.getElementById('titulo-seccion-admin');
+    if (titulo) titulo.textContent = 'Registros Eliminados';
+
+    tabla.innerHTML = '';
+    tabla.style.display = 'none';
+    contenedorEliminados.style.display = 'block';
+    contenedorEliminados.innerHTML = '';
+
+    if (solicitudesEliminadas.length === 0) {
+        const div = document.createElement('div');
+        div.style.textAlign = 'center';
+        div.style.padding = '40px';
+        div.style.color = '#999';
+        div.textContent = 'No hay registros eliminados';
+        contenedorEliminados.appendChild(div);
+        return;
+    }
+
+    solicitudesEliminadas.forEach(eliminado => {
+        const div = document.createElement('div');
+        div.className = 'registro-eliminado-item';
+        div.innerHTML = `
+            <div class="registro-eliminado-header">
+                <strong>${eliminado.nombre || 'Sin nombre'}</strong>
+                <span class="fecha-eliminado">Eliminado: ${eliminado.fechaEliminacion}</span>
+            </div>
+            <div class="registro-eliminado-body">
+                <p><strong>Sector:</strong> ${eliminado.sector || '-'}</p>
+                <p><strong>Tipo:</strong> ${eliminado.tipo || '-'}</p>
+                <p><strong>Urgencia:</strong> ${eliminado.urgencia || '-'}</p>
+                <p><strong>Eliminado por:</strong> ${eliminado.eliminadoPor || '-'}</p>
+                <p><strong>Motivo:</strong> ${eliminado.motivo || 'Sin motivo'}</p>
+            </div>
+        `;
+        contenedorEliminados.appendChild(div);
     });
 }
 

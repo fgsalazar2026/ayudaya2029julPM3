@@ -592,6 +592,7 @@
                         <button class="admin-tab active" data-tab="solicitudes">📋 Solicitudes</button>
                         <button class="admin-tab" data-tab="donaciones">💝 Donaciones</button>
                         <button class="admin-tab" data-tab="usuarios">👥 Usuarios</button>
+                        <button class="admin-tab" data-tab="eliminados">🗑 Registros Eliminados</button>
                     </div>
 
                     <div id="tab-solicitudes" class="admin-tab-content active">
@@ -739,6 +740,18 @@
                                 </table>
                             </div>
                             <div id="usuarios-paginacion" class="admin-paginacion"></div>
+                        </div>
+                    </div>
+
+                    <div id="tab-eliminados" class="admin-tab-content">
+                        <div class="admin-section">
+                            <h3>Registros Eliminados</h3>
+                            <div class="admin-filtros">
+                                <button type="button" id="btn-exportar-eliminados-excel" class="btn-secondary" style="padding: 6px 14px; font-size: 0.8rem;">📥 Exportar Eliminados</button>
+                            </div>
+                            <div id="contenedor-eliminados" class="lista-eliminados">
+                                <div style="text-align: center; color: #999; padding: 40px;">No hay registros eliminados</div>
+                            </div>
                         </div>
                     </div>
                 </div>
