@@ -836,7 +836,8 @@ async function manejarRegistro(e) {
     const email = document.getElementById('registro-email').value;
     const password = document.getElementById('registro-password').value;
     const passwordConfirm = document.getElementById('registro-password-confirm').value;
-    const rol = document.getElementById('registro-rol').value;
+    let rol = document.getElementById('registro-rol').value;
+    if (!rol) rol = 'ciudadano';
     
     // VALIDACIONES
     if (usuario.length < 3) {
