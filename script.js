@@ -343,6 +343,25 @@ document.addEventListener('DOMContentLoaded', async function() {
         btnUbicacion.addEventListener('click', detectarUbicacion);
     }
 
+    // ENTIDAD RESPONSABLE SEGÚN TIPO DE NECESIDAD
+    const selectTipo = document.getElementById('tipo');
+    const inputEntidad = document.getElementById('entidad-responsable');
+    const entidadesPorTipo = {
+        'infraestructura': 'GAD Municipal',
+        'alumbrado': 'CNEL EP',
+        'seguridad': 'Policía Nacional',
+        'servicios': 'Empresa de Agua / GAD / Empresa Eléctrica',
+        'educacion': 'Ministerio de Educación',
+        'salud': 'Ministerio de Salud Pública',
+        'otro': 'GAD Municipal'
+    };
+    if (selectTipo && inputEntidad) {
+        selectTipo.addEventListener('change', () => {
+            const tipo = selectTipo.value;
+            inputEntidad.value = entidadesPorTipo[tipo] || '';
+        });
+    }
+
     // LISTENERS DE LA VENTANA MODAL DE REPORTE
     const modalReporte = document.getElementById('modal-reporte');
     const btnAbrirReporte = document.getElementById('btn-abrir-reporte');
@@ -1363,6 +1382,7 @@ async function manejarReporte(e) {
         telefono: document.getElementById('telefono').value,
         sector: document.getElementById('sector').value,
         tipo: document.getElementById('tipo').value,
+        entidadResponsable: document.getElementById('entidad-responsable').value,
         descripcion: document.getElementById('descripcion').value,
         urgencia: document.getElementById('urgencia').value,
         estado: 'En revisión',
@@ -1427,6 +1447,7 @@ async function guardarSolicitud(nuevaSolicitud) {
     cerrarModalReporte();
     document.getElementById('formulario-reporte').reset();
     document.getElementById('preview-foto').style.display = 'none';
+    document.getElementById('entidad-responsable').value = '';
     document.getElementById('preview-foto').src = '';
     document.getElementById('nombre').value = usuarioActual.nombre;
     document.getElementById('email').value = usuarioActual.email;
@@ -1450,6 +1471,8 @@ function abrirModalReporte() {
     }
     document.getElementById('nombre').value = usuarioActual ? usuarioActual.nombre : '';
     document.getElementById('email').value = usuarioActual ? usuarioActual.email : '';
+    const entidadInput = document.getElementById('entidad-responsable');
+    if (entidadInput) entidadInput.value = '';
     modal.style.display = 'flex';
     const primerCampo = document.getElementById('sector');
     if (primerCampo) primerCampo.focus();
@@ -2630,6 +2653,12 @@ function actualizarTablasAdmin() {
 
     let solicitudesFiltradas = solicitudes.slice();
 
+    solicitudesFiltradas.sort((a, b) => {
+        const fechaA = new Date(a.fecha || 0);
+        const fechaB = new Date(b.fecha || 0);
+        return fechaB - fechaA;
+    });
+
     if (busqueda) {
         solicitudesFiltradas = solicitudesFiltradas.filter(s =>
             (s.sector || '').toLowerCase().includes(busqueda) ||
@@ -2653,7 +2682,7 @@ function actualizarTablasAdmin() {
     if (solicitudesPaginadas.length === 0) {
         const tr = document.createElement('tr');
         const td = document.createElement('td');
-        td.colSpan = 8; td.style.textAlign = 'center'; td.style.color = '#999'; td.textContent = 'No hay solicitudes';
+        td.colSpan = 9; td.style.textAlign = 'center'; td.style.color = '#999'; td.textContent = 'No hay solicitudes';
         tr.appendChild(td);
         tabla.appendChild(tr);
         console.log('Tabla admin: sin solicitudes filtradas');
@@ -2662,13 +2691,15 @@ function actualizarTablasAdmin() {
     }
 
     console.log('Tabla admin: renderizando', solicitudesPaginadas.length, 'filas de', adminSolicitudesFiltradas.length);
-    solicitudesPaginadas.forEach(sol => {
+    solicitudesPaginadas.forEach((sol, index) => {
         const tr = document.createElement('tr');
 
+        const tdNumero = document.createElement('td'); tdNumero.textContent = inicio + index + 1; tr.appendChild(tdNumero);
         const tdFecha = document.createElement('td'); tdFecha.textContent = sol.fecha; tr.appendChild(tdFecha);
         const tdNombre = document.createElement('td'); tdNombre.textContent = sol.nombre; tr.appendChild(tdNombre);
         const tdSector = document.createElement('td'); tdSector.textContent = sol.sector; tr.appendChild(tdSector);
         const tdTipo = document.createElement('td'); tdTipo.textContent = sol.tipo; tr.appendChild(tdTipo);
+        const tdEntidad = document.createElement('td'); tdEntidad.textContent = sol.entidadResponsable || '-'; tr.appendChild(tdEntidad);
         const tdUrg = document.createElement('td'); const spanUrg = document.createElement('span'); spanUrg.className = `urgencia-${sol.urgencia}`; spanUrg.textContent = sol.urgencia.toUpperCase(); tdUrg.appendChild(spanUrg); tr.appendChild(tdUrg);
         const tdEstado = document.createElement('td');
         const spanEstado = document.createElement('span');
@@ -2819,6 +2850,7 @@ function mostrarRegistrosEliminados() {
             <div class="registro-eliminado-body">
                 <p><strong>Sector:</strong> ${eliminado.sector || '-'}</p>
                 <p><strong>Tipo:</strong> ${eliminado.tipo || '-'}</p>
+                <p><strong>Entidad Responsable:</strong> ${eliminado.entidadResponsable || '-'}</p>
                 <p><strong>Urgencia:</strong> ${eliminado.urgencia || '-'}</p>
                 <p><strong>Eliminado por:</strong> ${eliminado.eliminadoPor || '-'}</p>
                 <p><strong>Motivo:</strong> ${eliminado.motivo || 'Sin motivo'}</p>

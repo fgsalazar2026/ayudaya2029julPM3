@@ -295,6 +295,11 @@
                     </div>
 
                     <div class="form-group">
+                        <label for="entidad-responsable">Entidad Responsable:</label>
+                        <input type="text" id="entidad-responsable" name="entidad-responsable" readonly placeholder="Se mostrará automáticamente">
+                    </div>
+
+                    <div class="form-group">
                         <label for="descripcion">Descripción Detallada:</label>
                         <textarea id="descripcion" name="descripcion" rows="3" required></textarea>
                     </div>
@@ -634,10 +639,12 @@
                                 <table id="tabla-admin">
                                     <thead>
                                         <tr>
+                                            <th>N°</th>
                                             <th>Fecha</th>
                                             <th>Usuario</th>
                                             <th>Sector</th>
                                             <th>Tipo</th>
+                                            <th>Entidad Responsable</th>
                                             <th>Urgencia</th>
                                             <th>Estado</th>
                                             <th>Imagen</th>
@@ -646,7 +653,7 @@
                                     </thead>
                                     <tbody id="tabla-admin-cuerpo">
                                         <tr>
-                                            <td colspan="8" style="text-align: center; color: #999;">No hay solicitudes</td>
+                                            <td colspan="10" style="text-align: center; color: #999;">No hay solicitudes</td>
                                         </tr>
                                     </tbody>
                                 </table>
