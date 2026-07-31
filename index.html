@@ -166,9 +166,10 @@
             <div class="logo" id="logo-principal" style="cursor: pointer;">
                 <h1>🤝 Gestión Comunitaria</h1>
             </div>
-            <button class="menu-toggle" id="menu-toggle" aria-label="Abrir menú">
+             <button class="menu-toggle" id="menu-toggle" aria-label="Abrir menú">
                 <span></span><span></span><span></span>
             </button>
+            <div class="nav-overlay" id="nav-overlay"></div>
             <ul class="nav-menu" id="nav-menu">
                 <li><a href="#inicio" class="nav-link-btn">🏠 Inicio</a></li>
                 <li><button type="button" class="nav-link-btn" id="nav-reportar">📝 Reportar Necesidad</button></li>
@@ -274,22 +275,25 @@
                             <input type="text" id="sector" name="sector" placeholder="Se llenará automáticamente" required>
                             <button type="button" id="btn-ubicacion" class="btn-ubicacion">📍 Detectar Ubicación</button>
                         </div>
-                        <div id="mapa-reporte" style="height: 160px; border-radius: 10px; margin-top: 8px; border: 1px solid var(--border);"></div>
-                        <small id="ubicacion-info" style="display:none; color: #666; margin-top: 5px; font-size: 0.8rem;">
-                            📍 Lat: <span id="lat">-</span> | Lon: <span id="lon">-</span>
-                        </small>
+                        <div id="ubicacion-info" style="display:none; margin-top: 8px; padding: 8px 10px; background: #f0f4f8; border-radius: 8px; border: 1px solid var(--border); font-size: 0.85rem; color: #333;">
+                            <p style="margin: 4px 0;"><strong>📍 Lat:</strong> <span id="lat">-</span></p>
+                            <p style="margin: 4px 0;"><strong>📍 Lon:</strong> <span id="lon">-</span></p>
+                            <p style="margin: 4px 0;"><strong>📍 Dirección:</strong> <span id="direccion">-</span></p>
+                        </div>
                     </div>
 
                     <div class="form-group">
                         <label for="tipo">Tipo de Necesidad:</label>
                         <select id="tipo" name="tipo" required>
                             <option value="">-- Selecciona --</option>
-                            <option value="infraestructura">Infraestructura (baches, calles)</option>
-                            <option value="alumbrado">Alumbrado Público</option>
-                            <option value="seguridad">Seguridad/Delincuencia</option>
-                            <option value="servicios">Servicios Básicos</option>
-                            <option value="educacion">Educación</option>
-                            <option value="salud">Salud</option>
+                            <option value="seguridad">Seguridad ciudadana</option>
+                            <option value="alumbrado">Alumbrado público / Iluminarias dañadas</option>
+                            <option value="infraestructura">Infraestructura pública</option>
+                            <option value="agua">Agua potable</option>
+                            <option value="incendios">Incendios forestales</option>
+                            <option value="basura">Basura / Recolección de desechos</option>
+                            <option value="iluminarias">Iluminarias</option>
+                            <option value="asfaltado">Asfaltado público / Baches</option>
                             <option value="otro">Otro</option>
                         </select>
                     </div>
@@ -300,8 +304,15 @@
                     </div>
 
                     <div class="form-group">
+                        <label for="subcaso">Subcaso:</label>
+                        <select id="subcaso" name="subcaso">
+                            <option value="">-- Selecciona --</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
                         <label for="descripcion">Descripción Detallada:</label>
-                        <textarea id="descripcion" name="descripcion" rows="3" required></textarea>
+                        <textarea id="descripcion" name="descripcion" rows="3" readonly></textarea>
                     </div>
 
                     <div class="form-group">
@@ -314,13 +325,7 @@
                         </select>
                     </div>
 
-                    <div class="form-group">
-                        <label for="foto">Foto de la Necesidad:</label>
-                        <input type="file" id="foto" name="foto" accept="image/*" capture="environment">
-                        <img id="preview-foto" src="" alt="Preview" style="display:none; max-width: 140px; margin-top: 8px; border-radius: 8px;">
-                    </div>
-
-                    <button type="submit" class="btn-primary">Enviar Reporte</button>
+                     <button type="submit" class="btn-primary">Enviar Reporte</button>
                 </form>
             </div>
         </div>
@@ -356,12 +361,11 @@
                                     <th>Sector</th>
                                     <th>Estado</th>
                                     <th>Urgencia</th>
-                                    <th>Imagen</th>
                                 </tr>
                             </thead>
                             <tbody id="tabla-cuerpo">
                                 <tr>
-                                    <td colspan="6" style="text-align: center; color: #999;">No hay solicitudes registradas</td>
+                                    <td colspan="5" style="text-align: center; color: #999;">No hay solicitudes registradas</td>
                                 </tr>
                         </tbody>
                     </table>
@@ -396,10 +400,9 @@
                     <div class="form-group">
                         <label for="don-tipo">Tipo de Donación:</label>
                         <select id="don-tipo" name="tipo" required>
-                            <option value="">-- Selecciona --</option>
-                            <option value="monetaria">Monetaria</option>
-                            <option value="bienes">Bienes</option>
-                            <option value="voluntariado">Voluntariado</option>
+<option value="">-- Selecciona --</option>
+                             <option value="bienes">Bienes</option>
+                             <option value="voluntariado">Voluntariado</option>
                         </select>
                     </div>
 

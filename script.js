@@ -293,21 +293,51 @@ document.addEventListener('DOMContentLoaded', async function() {
     if (formRegistro) formRegistro.addEventListener('submit', manejarRegistro);
     if (btnLogout) btnLogout.addEventListener('click', cerrarSesion);
 
-    // MENÚ HAMBURGUESA (MÓVIL)
-    const menuToggle = document.getElementById('menu-toggle');
-    const navMenu = document.getElementById('nav-menu');
-    if (menuToggle && navMenu) {
-        menuToggle.addEventListener('click', () => {
-            navMenu.classList.toggle('active');
-            menuToggle.classList.toggle('active');
+// MENÚ HAMBURGUESA (MÓVIL)
+const menuToggle = document.getElementById('menu-toggle');
+const navMenu = document.getElementById('nav-menu');
+const navOverlay = document.getElementById('nav-overlay');
+
+function cerrarMenu() {
+    if (navMenu) navMenu.classList.remove('active');
+    if (menuToggle) menuToggle.classList.remove('active');
+    if (navOverlay) navOverlay.classList.remove('active');
+}
+
+function abrirMenu() {
+    if (navMenu) navMenu.classList.add('active');
+    if (menuToggle) menuToggle.classList.add('active');
+    if (navOverlay) navOverlay.classList.add('active');
+}
+
+if (menuToggle && navMenu) {
+    menuToggle.addEventListener('click', () => {
+        if (navMenu.classList.contains('active')) {
+            cerrarMenu();
+        } else {
+            abrirMenu();
+        }
+    });
+    navMenu.querySelectorAll('a, button').forEach(el => {
+        el.addEventListener('click', () => {
+            cerrarMenu();
         });
-        navMenu.querySelectorAll('a').forEach(link => {
-            link.addEventListener('click', () => {
-                navMenu.classList.remove('active');
-                menuToggle.classList.remove('active');
-            });
-        });
+    });
+}
+
+if (navOverlay) {
+    navOverlay.addEventListener('click', cerrarMenu);
+}
+
+document.addEventListener('click', (e) => {
+    if (!navMenu || !menuToggle) return;
+    if (navMenu.classList.contains('active') &&
+        !navMenu.contains(e.target) &&
+        !menuToggle.contains(e.target) &&
+        !(navOverlay && navOverlay.contains(e.target))) {
+        cerrarMenu();
     }
+});
     const btnFirebaseTest = document.getElementById('btn-firebase-test');
     if (btnFirebaseTest) btnFirebaseTest.addEventListener('click', probarConexionFirebase);
     
@@ -315,26 +345,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     const formularioReporte = document.getElementById('formulario-reporte');
     if (formularioReporte) {
         formularioReporte.addEventListener('submit', manejarReporte);
-    }
-    
-    // PREVIEW DE FOTO
-    const inputFoto = document.getElementById('foto');
-    const previewFoto = document.getElementById('preview-foto');
-    if (inputFoto && previewFoto) {
-        inputFoto.addEventListener('change', () => {
-            const file = inputFoto.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    previewFoto.src = e.target.result;
-                    previewFoto.style.display = 'block';
-                };
-                reader.readAsDataURL(file);
-            } else {
-                previewFoto.src = '';
-                previewFoto.style.display = 'none';
-            }
-        });
     }
     
     // LISTENERS DE UBICACIÓN
@@ -346,19 +356,231 @@ document.addEventListener('DOMContentLoaded', async function() {
     // ENTIDAD RESPONSABLE SEGÚN TIPO DE NECESIDAD
     const selectTipo = document.getElementById('tipo');
     const inputEntidad = document.getElementById('entidad-responsable');
+    const selectSubcaso = document.getElementById('subcaso');
+    const textareaDescripcion = document.getElementById('descripcion');
     const entidadesPorTipo = {
-        'infraestructura': 'GAD Municipal',
+        'seguridad': 'Policía Nacional del Ecuador / Segura EP',
         'alumbrado': 'CNEL EP',
-        'seguridad': 'Policía Nacional',
-        'servicios': 'Empresa de Agua / GAD / Empresa Eléctrica',
-        'educacion': 'Ministerio de Educación',
-        'salud': 'Ministerio de Salud Pública',
+        'infraestructura': 'Municipio de Guayaquil',
+        'agua': 'Interagua',
+        'incendios': 'Cuerpo de Bomberos de Guayaquil / Secretaría Nacional de Gestión de Riesgos',
+        'basura': 'Dirección de Aseo Cantonal y Servicios Especiales',
+        'iluminarias': 'CNEL EP',
+        'asfaltado': 'Dirección de Obras Públicas del Municipio de Guayaquil',
         'otro': 'GAD Municipal'
+    };
+    const subcasosPorTipo = {
+        'seguridad': [
+            { value: 'robo-personas', label: 'Robo a personas', description: 'Asaltos o robos en la vía pública.' },
+            { value: 'robo-viviendas', label: 'Robo a viviendas', description: 'Ingreso ilegal o intento de robo en domicilios.' },
+            { value: 'robo-vehiculos', label: 'Robo de vehículos', description: 'Robo o intento de robo de autos o motocicletas.' },
+            { value: 'sospechosos', label: 'Personas sospechosas', description: 'Individuos con comportamiento inusual o sospechoso.' },
+            { value: 'drogas', label: 'Venta o consumo de drogas', description: 'Reporte de microtráfico o consumo en espacios públicos.' },
+            { value: 'pandillas', label: 'Pandillas', description: 'Presencia de grupos que generan inseguridad.' },
+            { value: 'violencia-familiar', label: 'Violencia intrafamiliar', description: 'Casos de violencia dentro del hogar.' },
+            { value: 'agresiones-fisicas', label: 'Agresiones físicas', description: 'Peleas o ataques entre personas.' },
+            { value: 'acoso-callejero', label: 'Acoso callejero', description: 'Hostigamiento o intimidación en espacios públicos.' },
+            { value: 'violencia-genero', label: 'Violencia de género', description: 'Agresiones o amenazas por razones de género.' },
+            { value: 'vandalismo', label: 'Vandalismo', description: 'Daños a bienes públicos o privados.' },
+            { value: 'riñas', label: 'Riñas en espacios públicos', description: 'Peleas en parques, calles o plazas.' },
+            { value: 'disparos', label: 'Disparos o uso de armas', description: 'Reporte de detonaciones o personas armadas.' },
+            { value: 'ruido', label: 'Ruido excesivo', description: 'Fiestas, locales o actividades con alto volumen.' },
+            { value: 'alumbrado-apagado', label: 'Alumbrado apagado', description: 'Calles oscuras que representan riesgo para la seguridad.' },
+            { value: 'camaras-dañadas', label: 'Cámaras dañadas', description: 'Cámaras de vigilancia averiadas o fuera de servicio.' },
+            { value: 'emergencia-policial', label: 'Emergencia policial', description: 'Situación que requiere intervención inmediata de la policía.' },
+            { value: 'personas-desaparecidas', label: 'Personas desaparecidas', description: 'Reporte de desaparición o búsqueda de personas.' },
+            { value: 'amenazas', label: 'Amenazas o extorsión', description: 'Casos de intimidación o cobro ilegal.' },
+            { value: 'otro-seguridad', label: 'Otro incidente de seguridad', description: 'Cualquier problema no contemplado en las categorías anteriores.' }
+        ],
+        'alumbrado': [
+            { value: 'luminaria-apagada', label: 'Luminaria apagada', description: 'La lámpara no enciende durante la noche.' },
+            { value: 'luminaria-intermitente', label: 'Luminaria intermitente', description: 'La luz enciende y apaga constantemente.' },
+            { value: 'poste-caído', label: 'Poste caído', description: 'El poste de alumbrado se encuentra en el suelo.' },
+            { value: 'poste-inclinado', label: 'Poste inclinado', description: 'El poste presenta riesgo de caída.' },
+            { value: 'luminaria-rotada', label: 'Luminaria rota', description: 'La lámpara o el reflector están dañados.' },
+            { value: 'cableado-expuesto', label: 'Cableado expuesto', description: 'Existen cables eléctricos visibles o sueltos.' },
+            { value: 'cortocircuito', label: 'Cortocircuito', description: 'Se observan chispas, humo o fallas eléctricas.' },
+            { value: 'brazo-dañado', label: 'Brazo de luminaria dañado', description: 'El soporte de la lámpara está roto o doblado.' },
+            { value: 'falta-luminaria', label: 'Falta de luminaria', description: 'El poste existe, pero no tiene lámpara.' },
+            { value: 'zona-sin-iluminacion', label: 'Zona sin iluminación', description: 'Un sector completo carece de alumbrado público.' },
+            { value: 'luminaria-día', label: 'Luminaria encendida de día', description: 'La luz permanece encendida durante el día.' },
+            { value: 'baja-intensidad', label: 'Luz con baja intensidad', description: 'La iluminación es insuficiente para la zona.' },
+            { value: 'reflector-dañado', label: 'Reflector dañado', description: 'Reflectores de parques o canchas fuera de servicio.' },
+            { value: 'caja-electricidad', label: 'Caja eléctrica abierta', description: 'La caja de conexiones está abierta o dañada.' },
+            { value: 'poste-chocado', label: 'Poste chocado', description: 'El poste fue impactado por un vehículo.' },
+            { value: 'poste-riesgo-electrico', label: 'Poste con riesgo eléctrico', description: 'Se perciben descargas, chispas o cables energizados.' },
+            { value: 'luminaria-obstruida', label: 'Luminaria obstruida', description: 'Árboles o estructuras bloquean la iluminación.' },
+            { value: 'daño-vandalismo', label: 'Daño por vandalismo', description: 'La luminaria o el poste fueron destruidos intencionalmente.' },
+            { value: 'mantenimiento-preventivo', label: 'Mantenimiento preventivo', description: 'Solicitud de revisión antes de una falla.' },
+            { value: 'otro-alumbrado', label: 'Otro problema de alumbrado', description: 'Cualquier incidente no contemplado en las categorías anteriores.' }
+        ],
+        'infraestructura': [
+            { value: 'baches', label: 'Baches en la vía', description: 'Huecos o deterioro en calles y avenidas.' },
+            { value: 'hundimiento', label: 'Hundimiento de calzada', description: 'Hundimientos o deformaciones del pavimento.' },
+            { value: 'acera-dañada', label: 'Acera dañada', description: 'Veredas rotas o con desniveles.' },
+            { value: 'bordillos', label: 'Bordillos deteriorados', description: 'Bordillos rotos o desplazados.' },
+            { value: 'puente', label: 'Puente en mal estado', description: 'Daños estructurales en puentes peatonales o vehiculares.' },
+            { value: 'escalinatas', label: 'Escalinatas deterioradas', description: 'Escaleras públicas con daños o riesgo.' },
+            { value: 'barandas', label: 'Barandas dañadas', description: 'Barandas de protección rotas o faltantes.' },
+            { value: 'señalizacion', label: 'Señalización vial dañada', description: 'Señales caídas, ilegibles o destruidas.' },
+            { value: 'semáforo', label: 'Semáforo averiado', description: 'Semáforos apagados, intermitentes o fuera de servicio.' },
+            { value: 'paradero', label: 'Paradero de bus deteriorado', description: 'Marquesinas o paradas de transporte dañadas.' },
+            { value: 'parque-infantil', label: 'Parque infantil dañado', description: 'Juegos infantiles rotos o inseguros.' },
+            { value: 'mobiliario-urbano', label: 'Mobiliario urbano dañado', description: 'Bancas, basureros o bolardos deteriorados.' },
+            { value: 'cancha-deportiva', label: 'Cancha deportiva deteriorada', description: 'Daños en pisos, graderíos o cerramientos.' },
+            { value: 'plaza-parque', label: 'Plaza o parque en mal estado', description: 'Áreas públicas con infraestructura deteriorada.' },
+            { value: 'rejillas', label: 'Rejillas o tapas de alcantarilla dañadas', description: 'Tapas rotas, hundidas o inexistentes.' },
+            { value: 'muros', label: 'Muros o cerramientos dañados', description: 'Muros públicos con grietas o colapsos.' },
+            { value: 'deslizamiento', label: 'Deslizamiento de tierra', description: 'Afectación de infraestructura por derrumbes.' },
+            { value: 'obra-inconclusa', label: 'Obra pública inconclusa', description: 'Construcciones abandonadas o sin finalizar.' },
+            { value: 'riesgo-colapso', label: 'Riesgo de colapso estructural', description: 'Infraestructura con peligro evidente de colapso.' },
+            { value: 'otro-infraestructura', label: 'Otro problema de infraestructura', description: 'Cualquier incidente no contemplado en las categorías anteriores.' }
+        ],
+        'agua': [
+            { value: 'fuga-agua', label: 'Fuga de agua', description: 'Derrames o pérdida de agua en la red pública.' },
+            { value: 'baja-presion', label: 'Baja presión de agua', description: 'Suministro con presión insuficiente o intermitente.' },
+            { value: 'corte-agua', label: 'Corte de agua', description: 'Interrupción del servicio de agua potable.' },
+            { value: 'agua-contaminada', label: 'Agua contaminada o turbia', description: 'Agua con color, olor o sabor anormal.' },
+            { value: 'medidor-dañado', label: 'Medidor dañado', description: 'Medidor de agua roto o registrando incorrectamente.' },
+            { value: 'fuga-medidor', label: 'Fuga en medidor de agua', description: 'El medidor presenta fugas o lecturas erráticas.' },
+            { value: 'tuberia-rompida', label: 'Tubería rota o rota', description: 'Fuga o ruptura en la red de tuberías principales.' },
+            { value: 'tuberia-obstruida', label: 'Tubería obstruida', description: 'Taponamiento en la red de agua potable.' },
+            { value: 'agua-escasa', label: 'Falta de agua en la zona', description: 'Sector sin suministro de agua potable.' },
+            { value: 'agua-horario', label: 'Horario de agua insuficiente', description: 'El suministro no cubre las horas necesarias.' },
+            { value: 'agua-caliente', label: 'Agua caliente sin calentador', description: 'Falta de sistema de calentamiento de agua.' },
+            { value: 'exceso-presion', label: 'Exceso de presión de agua', description: 'La presión del agua es demasiado alta y daña instalaciones.' },
+            { value: 'agua-plomeria', label: 'Problemas de plomería', description: 'Fugas o daños en instalaciones internas de plomería.' },
+            { value: 'agua-riego', label: 'Problema con sistema de riego', description: 'Fallas en el sistema de riego público o comunitario.' },
+            { value: 'agua-residuos', label: 'Agua con residuos o sedimentos', description: 'El agua sale con partículas o material extraño.' },
+            { value: 'solicitud-nueva-toma', label: 'Solicitud de nueva toma de agua', description: 'Se requiere instalar un nuevo punto de suministro.' },
+            { value: 'reparacion-tuberia', label: 'Reparación de tubería necesaria', description: 'Se necesita mantenimiento urgente en la red de agua.' },
+            { value: 'agua-zona-rural', label: 'Agua en zona rural sin cobertura', description: 'Comunidades rurales sin acceso a agua potable.' },
+            { value: 'contaminacion-origen', label: 'Contaminación en el origen del agua', description: 'Fuente de agua contaminada que afecta el suministro.' },
+            { value: 'otro-agua', label: 'Otro problema de agua', description: 'Cualquier inconveniente no contemplado en las categorías anteriores.' }
+        ],
+        'incendios': [
+            { value: 'incendio-activo', label: 'Incendio forestal activo', description: 'Fuego propagándose en vegetación o bosque.' },
+            { value: 'quema-maleza', label: 'Quema de maleza', description: 'Incendio en pastizales o maleza seca.' },
+            { value: 'quema-agricola', label: 'Quema agrícola no controlada', description: 'Quema de cultivos que se salió de control.' },
+            { value: 'humo-zonal', label: 'Humo en zona forestal', description: 'Presencia de humo que puede indicar un incendio.' },
+            { value: 'reignicion', label: 'Reignición de incendio', description: 'Un incendio previamente controlado vuelve a activarse.' },
+            { value: 'propagacion-viviendas', label: 'Propagación hacia viviendas', description: 'El fuego amenaza zonas habitadas.' },
+            { value: 'propagacion-cultivos', label: 'Propagación hacia cultivos', description: 'El incendio pone en riesgo áreas agrícolas.' },
+            { value: 'arbol-incendiado', label: 'Árbol incendiado', description: 'Uno o varios árboles se encuentran en llamas.' },
+            { value: 'incendio-parque', label: 'Incendio en parque o área verde', description: 'Fuego en parques, reservas o jardines públicos.' },
+            { value: 'incendio-electrico', label: 'Incendio por causas eléctricas', description: 'Fuego originado por postes o líneas eléctricas.' },
+            { value: 'incendio-provocado', label: 'Incendio provocado', description: 'Sospecha de incendio intencional.' },
+            { value: 'material-inflamable', label: 'Material inflamable en llamas', description: 'Quema de llantas, basura o sustancias inflamables.' },
+            { value: 'riesgo-propagacion', label: 'Riesgo de propagación', description: 'Condiciones que favorecen la expansión del fuego.' },
+            { value: 'personas-en-riesgo', label: 'Personas atrapadas o en riesgo', description: 'Ciudadanos que requieren evacuación o rescate.' },
+            { value: 'animales-afectados', label: 'Animales afectados', description: 'Fauna doméstica o silvestre en peligro por el incendio.' },
+            { value: 'acceso-bloqueado', label: 'Acceso bloqueado', description: 'Caminos o vías cerradas por el incendio.' },
+            { value: 'apoyo-bomberos', label: 'Solicitud de apoyo de bomberos', description: 'Requerimiento de atención urgente del cuerpo de bomberos.' },
+            { value: 'zona-afectada', label: 'Zona afectada después del incendio', description: 'Evaluación de daños tras la extinción del fuego.' },
+            { value: 'riesgo-reactivacion', label: 'Riesgo de reactivación', description: 'Existen brasas o focos de calor que pueden reavivar el incendio.' },
+            { value: 'otro-incendio', label: 'Otro incidente relacionado', description: 'Cualquier situación no contemplada en las categorías anteriores.' }
+        ],
+        'basura': [
+            { value: 'recoleccion-falta', label: 'Falta de recolección de basura', description: 'Servicio de aseo que no recolecta los desechos regularmente.' },
+            { value: 'basura-acumulada', label: 'Basura acumulada en calles', description: 'Desechos abandonados en espacios públicos.' },
+            { value: 'vertedero-clandestino', label: 'Vertedero clandestino', description: 'Depósitos ilegales de basura en terrenos baldíos o calles.' },
+            { value: 'plagas-basura', label: 'Plagas por basura', description: 'Presencia de roedores, insectos o animales por acumulación de desechos.' },
+            { value: 'deseos-peligrosos', label: 'Desechos peligrosos o industriales', description: 'Residuos químicos, médicos o industriales en espacios públicos.' },
+            { value: 'basura-hundida', label: 'Basura en alcantarillas o sumideros', description: 'Desechos obstruyendo el sistema de drenaje.' },
+            { value: 'basura-playa', label: 'Basura en playas o ríos', description: 'Contaminación de cuerpos de agua con desechos.' },
+            { value: 'basura-por-agua', label: 'Basura arrastrada por el agua', description: 'Desechos acumulados por crecidas o lluvias.' },
+            { value: 'contenedores-llenos', label: 'Contenedores desbordados', description: 'Basureros públicos llenos sin recolección.' },
+            { value: 'sin-contenedores', label: 'Falta de contenedores de basura', description: 'Ausencia de botes de recolección en la zona.' },
+            { value: 'basura-organica', label: 'Basura orgánica en mal estado', description: 'Restos de comida o materia orgánica en descomposición.' },
+            { value: 'basura-electronica', label: 'Basura electrónica', description: 'Aparatos electrónicos o electrodomésticos abandonados.' },
+            { value: 'basura-peligrosa', label: 'Basura que genera riesgo sanitario', description: 'Desechos que representan un riesgo para la salud pública.' },
+            { value: 'limpieza-necesaria', label: 'Solicitud de limpieza de zona', description: 'Requerimiento de limpieza o desinfección de un área.' },
+            { value: 'basura-construccion', label: 'Escombros o basura de construcción', description: 'Residuos de obra o demolición en la vía pública.' },
+            { value: 'basura-privada', label: 'Basura de propiedad privada en la vía', description: 'Desechos de hogares o negocios en la acera o calle.' },
+            { value: 'fugas-liquidas', label: 'Fugas de líquidos en la vía', description: 'Derrames de líquidos que contaminan el espacio público.' },
+            { value: 'basura-nocturna', label: 'Basura recolectada en horario nocturno', description: 'Problemas con la recolección nocturna de desechos.' },
+            { value: 'basura-temporal', label: 'Basura temporal en eventos', description: 'Acumulación de desechos tras eventos públicos.' },
+            { value: 'otro-basura', label: 'Otro problema de basura', description: 'Cualquier situación no contemplada en las categorías anteriores.' }
+        ],
+        'iluminarias': [
+            { value: 'luminaria-apagada', label: 'Luminaria apagada', description: 'La lámpara no enciende durante la noche.' },
+            { value: 'luminaria-día', label: 'Luminaria encendida de día', description: 'La luz permanece encendida durante el día.' },
+            { value: 'luminaria-intermitente', label: 'Luz intermitente', description: 'La luminaria enciende y apaga constantemente.' },
+            { value: 'baja-intensidad', label: 'Baja intensidad de luz', description: 'La iluminación es insuficiente.' },
+            { value: 'luminaria-rotada', label: 'Luminaria rota', description: 'La lámpara o carcasa está dañada.' },
+            { value: 'luminaria-suelelta', label: 'Luminaria desprendida', description: 'La luminaria está suelta o a punto de caer.' },
+            { value: 'luminaria-vandalizada', label: 'Luminaria vandalizada', description: 'Ha sido destruida o dañada intencionalmente.' },
+            { value: 'foco-quemado', label: 'Foco quemado', description: 'El foco necesita ser reemplazado.' },
+            { value: 'cable-expuesto', label: 'Cableado expuesto', description: 'Hay cables visibles que representan un riesgo.' },
+            { value: 'cortocircuito', label: 'Cortocircuito', description: 'Se observan chispas, humo o fallas eléctricas.' },
+            { value: 'reflector-dañado', label: 'Reflector dañado', description: 'Reflectores de parques o canchas fuera de servicio.' },
+            { value: 'brazo-dañado', label: 'Brazo de soporte dañado', description: 'El brazo que sostiene la luminaria está doblado o roto.' },
+            { value: 'luminaria-obstruida', label: 'Luminaria obstruida', description: 'Árboles o estructuras bloquean la iluminación.' },
+            { value: 'instalacion-incompleta', label: 'Instalación incompleta', description: 'Existe el poste, pero falta instalar la luminaria.' },
+            { value: 'exceso-iluminacion', label: 'Exceso de iluminación', description: 'La intensidad afecta a viviendas o conductores.' },
+            { value: 'luminaria-parpadeante', label: 'Luz parpadeante', description: 'La luminaria parpadea de forma constante.' },
+            { value: 'riesgo-electrico', label: 'Riesgo eléctrico', description: 'La luminaria presenta peligro por fallas eléctricas.' },
+            { value: 'solicitud-nueva', label: 'Solicitud de nueva luminaria', description: 'Se requiere instalar iluminación en un sector sin cobertura.' },
+            { value: 'mantenimiento-preventivo', label: 'Mantenimiento preventivo', description: 'Solicitud de revisión antes de que ocurra una falla.' },
+            { value: 'otro-iluminarias', label: 'Otro problema de iluminación', description: 'Cualquier incidente no contemplado en las categorías anteriores.' }
+        ],
+        'asfaltado': [
+            { value: 'bache-pequeño', label: 'Bache pequeño', description: 'Hueco de tamaño reducido en la calzada.' },
+            { value: 'bache-mediano', label: 'Bache mediano', description: 'Hueco de tamaño medio que afecta la circulación.' },
+            { value: 'bache-grande', label: 'Bache grande', description: 'Hueco de gran tamaño con alto riesgo de accidentes.' },
+            { value: 'multiples-baches', label: 'Múltiples baches', description: 'Varios baches concentrados en un mismo tramo.' },
+            { value: 'hundimiento-via', label: 'Hundimiento de la vía', description: 'Deformación o hundimiento del pavimento.' },
+            { value: 'grietas', label: 'Grietas en el asfalto', description: 'Fisuras que requieren reparación.' },
+            { value: 'asfalto-levantado', label: 'Pavimento levantado', description: 'El asfalto se encuentra desprendido o elevado.' },
+            { value: 'desgaste-asfalto', label: 'Desgaste del asfalto', description: 'Deterioro general de la superficie de rodadura.' },
+            { value: 'hueco-fuga-agua', label: 'Hueco por fuga de agua', description: 'Daño en la vía causado por una fuga de agua.' },
+            { value: 'asfalto-desprendido', label: 'Asfalto desprendido', description: 'Fragmentos de pavimento sueltos en la calzada.' },
+            { value: 'calle-sin-pavimentar', label: 'Calle sin pavimentar', description: 'Vía que requiere asfaltado.' },
+            { value: 'reparacion-inconclusa', label: 'Reparación inconclusa', description: 'Obra de asfaltado sin finalizar.' },
+            { value: 'señalizacion-ausente', label: 'Señalización de obra ausente', description: 'Reparaciones sin señalización preventiva.' },
+            { value: 'desnivel-peligroso', label: 'Desnivel peligroso', description: 'Diferencia de altura entre tramos de la vía.' },
+            { value: 'daño-lluvias', label: 'Daño después de lluvias', description: 'Pavimento deteriorado por precipitaciones.' },
+            { value: 'tapa-hundida', label: 'Tapa de alcantarilla hundida', description: 'Desnivel ocasionado por una tapa de alcantarilla.' },
+            { value: 'encharcamiento', label: 'Asfalto con acumulación de agua', description: 'Encharcamientos debido al mal estado de la vía.' },
+            { value: 'riesgo-motociclistas', label: 'Riesgo para motociclistas o ciclistas', description: 'Daños que representan peligro especial para vehículos de dos ruedas.' },
+            { value: 'solicitud-mantenimiento', label: 'Solicitud de mantenimiento vial', description: 'Petición de reparación preventiva del pavimento.' },
+            { value: 'otro-asfaltado', label: 'Otro problema de asfaltado', description: 'Cualquier daño no contemplado en las categorías anteriores.' }
+        ],
+        'otro': [
+            { value: 'otro-general', label: 'Otro problema general', description: 'Cualquier necesidad o problema no contemplado en las categorías anteriores.' }
+        ]
     };
     if (selectTipo && inputEntidad) {
         selectTipo.addEventListener('change', () => {
             const tipo = selectTipo.value;
             inputEntidad.value = entidadesPorTipo[tipo] || '';
+            if (selectSubcaso) {
+                selectSubcaso.innerHTML = '<option value="">-- Selecciona --</option>';
+                if (subcasosPorTipo[tipo]) {
+                    subcasosPorTipo[tipo].forEach(sub => {
+                        const option = document.createElement('option');
+                        option.value = sub.value;
+                        option.textContent = sub.label;
+                        selectSubcaso.appendChild(option);
+                    });
+                }
+            }
+        });
+    }
+    if (selectSubcaso && textareaDescripcion) {
+        selectSubcaso.addEventListener('change', () => {
+            const tipo = selectTipo ? selectTipo.value : '';
+            const subcasoVal = selectSubcaso.value;
+            if (tipo && subcasosPorTipo[tipo]) {
+                const sub = subcasosPorTipo[tipo].find(s => s.value === subcasoVal);
+                if (sub) {
+                    const tipoTexto = selectTipo.options[selectTipo.selectedIndex].text;
+                    const nombreReporta = usuarioActual ? usuarioActual.nombre : 'Anónimo';
+                    textareaDescripcion.value = sub.description + ' — Necesidad: ' + tipoTexto + ' — Reportado por: ' + nombreReporta;
+                } else {
+                    textareaDescripcion.value = '';
+                }
+            }
         });
     }
 
@@ -672,8 +894,8 @@ document.addEventListener('DOMContentLoaded', async function() {
     if (donTipo) {
         donTipo.addEventListener('change', () => {
             const tipo = donTipo.value;
-            if (grupoMonto) grupoMonto.style.display = tipo === 'monetaria' ? 'block' : 'none';
-            if (grupoBienes) grupoBienes.style.display = tipo !== 'monetaria' ? 'block' : 'none';
+            if (grupoMonto) grupoMonto.style.display = 'none';
+            if (grupoBienes) grupoBienes.style.display = tipo === 'bienes' ? 'block' : 'none';
         });
     }
 
@@ -1253,12 +1475,6 @@ function detectarUbicacion() {
             document.getElementById('lon').textContent = lon.toFixed(4);
             ubicacionInfo.style.display = 'block';
             
-            if (mapaReporte && typeof L !== 'undefined') {
-                mapaReporte.setView([lat, lon], 15);
-                if (marcadorMapa) mapaReporte.removeLayer(marcadorMapa);
-                marcadorMapa = L.marker([lat, lon]).addTo(mapaReporte);
-            }
-            
             // USAR NOMINATIM PARA OBTENER EL NOMBRE DEL LUGAR
             obtenerNombreLugar(lat, lon);
         },
@@ -1381,21 +1597,10 @@ async function manejarReporte(e) {
         coordenadas: {
             lat: coordenadas.lat,
             lon: coordenadas.lon
-        },
-        foto: null
+        }
     };
-    
-    const inputFoto = document.getElementById('foto');
-    if (inputFoto && inputFoto.files && inputFoto.files[0]) {
-        const reader = new FileReader();
-        reader.onload = async (ev) => {
-            nuevaSolicitud.foto = ev.target.result;
-            await guardarSolicitud(nuevaSolicitud);
-        };
-        reader.readAsDataURL(inputFoto.files[0]);
-    } else {
-        await guardarSolicitud(nuevaSolicitud);
-    }
+
+    await guardarSolicitud(nuevaSolicitud);
 }
 
 async function guardarSolicitud(nuevaSolicitud) {
@@ -1437,9 +1642,7 @@ async function guardarSolicitud(nuevaSolicitud) {
     alert('✅ ¡Solicitud registrada exitosamente!');
     cerrarModalReporte();
     document.getElementById('formulario-reporte').reset();
-    document.getElementById('preview-foto').style.display = 'none';
     document.getElementById('entidad-responsable').value = '';
-    document.getElementById('preview-foto').src = '';
     document.getElementById('nombre').value = usuarioActual.nombre;
     document.getElementById('email').value = usuarioActual.email;
     actualizarTabla();
@@ -1455,11 +1658,6 @@ function abrirModalReporte() {
     const modal = document.getElementById('modal-reporte');
     if (!modal) return;
     document.getElementById('formulario-reporte').reset();
-    const previewFoto = document.getElementById('preview-foto');
-    if (previewFoto) {
-        previewFoto.src = '';
-        previewFoto.style.display = 'none';
-    }
     document.getElementById('nombre').value = usuarioActual ? usuarioActual.nombre : '';
     document.getElementById('email').value = usuarioActual ? usuarioActual.email : '';
     const entidadInput = document.getElementById('entidad-responsable');
@@ -1467,38 +1665,11 @@ function abrirModalReporte() {
     modal.style.display = 'flex';
     const primerCampo = document.getElementById('sector');
     if (primerCampo) primerCampo.focus();
-
-    setTimeout(() => {
-        const contenedorMapa = document.getElementById('mapa-reporte');
-        if (!contenedorMapa || mapaReporte) return;
-        if (typeof L === 'undefined') return;
-        mapaReporte = L.map('mapa-reporte').setView([-2.170998, -79.922356], 13);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
-        }).addTo(mapaReporte);
-        mapaReporte.on('click', function(e) {
-            if (marcadorMapa) mapaReporte.removeLayer(marcadorMapa);
-            marcadorMapa = L.marker([e.latlng.lat, e.latlng.lng]).addTo(mapaReporte);
-            coordenadas.lat = e.latlng.lat;
-            coordenadas.lon = e.latlng.lng;
-            document.getElementById('lat').textContent = e.latlng.lat.toFixed(4);
-            document.getElementById('lon').textContent = e.latlng.lng.toFixed(4);
-            document.getElementById('ubicacion-info').style.display = 'block';
-            obtenerNombreLugar(e.latlng.lat, e.latlng.lng);
-        });
-    }, 150);
 }
 
 function cerrarModalReporte() {
     const modal = document.getElementById('modal-reporte');
     if (modal) modal.style.display = 'none';
-    const previewFoto = document.getElementById('preview-foto');
-    if (previewFoto) {
-        previewFoto.src = '';
-        previewFoto.style.display = 'none';
-    }
-    const inputFoto = document.getElementById('foto');
-    if (inputFoto) inputFoto.value = '';
     coordenadas.lat = null;
     coordenadas.lon = null;
 }
@@ -2156,7 +2327,7 @@ function abrirModalDonar() {
     (solicitudes || []).forEach(s => {
         const option = document.createElement('option');
         option.value = s.id;
-        option.textContent = `${s.fecha} - ${s.sector} - ${s.tipo}`;
+        option.textContent = `${s.fecha} - ${s.sector} - ${s.tipo} - ${s.nombre || ''}`;
         document.getElementById('don-solicitud').appendChild(option);
     });
     modal.style.display = 'flex';
@@ -2230,8 +2401,8 @@ function manejarDonacion(e) {
         telefono: usuarioActual ? (usuarioActual.telefono || '') : '',
         tipo,
         categoria,
-        monto: tipo === 'monetaria' ? monto : null,
-        descripcionBienes: tipo !== 'monetaria' ? descripcionBienes : '',
+        monto: null,
+        descripcionBienes,
         sector,
         coordenadas: { ...coordenadas },
         solicitudId,
@@ -2547,25 +2718,6 @@ function actualizarTabla() {
         tr.appendChild(tdEstado);
         const tdUrg = document.createElement('td');
         const spanUrg = document.createElement('span'); spanUrg.className = `urgencia-${sol.urgencia}`; spanUrg.textContent = sol.urgencia.toUpperCase(); tdUrg.appendChild(spanUrg); tr.appendChild(tdUrg);
-        const tdImagen = document.createElement('td');
-        if (sol.foto) {
-            const img = document.createElement('img');
-            img.src = sol.foto;
-            img.alt = 'Foto de la necesidad';
-            img.style.maxWidth = '60px';
-            img.style.maxHeight = '60px';
-            img.style.borderRadius = '6px';
-            img.style.cursor = 'pointer';
-            img.title = 'Ver imagen';
-            img.addEventListener('click', () => {
-                const win = window.open();
-                win.document.write(`<img src="${sol.foto}" style="max-width:100%;">`);
-            });
-            tdImagen.appendChild(img);
-        } else {
-            tdImagen.textContent = '-';
-        }
-        tr.appendChild(tdImagen);
 
         tablaCuerpo.appendChild(tr);
     });
@@ -2574,7 +2726,7 @@ function actualizarTabla() {
 function createEmptyRow(message) {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
-    td.colSpan = 6;
+    td.colSpan = 5;
     td.style.textAlign = 'center';
     td.style.color = '#999';
     td.textContent = message;
@@ -2692,7 +2844,7 @@ function actualizarTablasAdmin() {
         const tdTipo = document.createElement('td'); tdTipo.textContent = sol.tipo; tr.appendChild(tdTipo);
         const tdEntidad = document.createElement('td');
         const selectEntidad = document.createElement('select'); selectEntidad.className = 'btn-cambiar-estado';
-        const entidades = ['','GAD Municipal','CNEL EP','Policía Nacional','Empresa de Agua / GAD / Empresa Eléctrica','Ministerio de Educación','Ministerio de Salud Pública','Otro'];
+        const entidades = ['','Policía Nacional del Ecuador / Segura EP','CNEL EP','Municipio de Guayaquil','Interagua','Cuerpo de Bomberos de Guayaquil / Secretaría Nacional de Gestión de Riesgos','Dirección de Aseo Cantonal y Servicios Especiales','Dirección de Obras Públicas del Municipio de Guayaquil','Otro'];
         entidades.forEach(val => { const o = document.createElement('option'); o.value = val; o.textContent = val || '-- Seleccionar --'; selectEntidad.appendChild(o); });
         selectEntidad.value = sol.entidadResponsable || '';
         selectEntidad.addEventListener('change', function() {

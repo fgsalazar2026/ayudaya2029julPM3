@@ -437,6 +437,8 @@ section {
     border: none;
     cursor: pointer;
     padding: 0;
+    z-index: 101;
+    position: relative;
 }
 
 .menu-toggle span {
@@ -446,6 +448,7 @@ section {
     background: #fff;
     border-radius: 3px;
     transition: transform 0.3s ease, opacity 0.3s ease;
+    transform-origin: center;
 }
 
 .menu-toggle.active span:nth-child(1) {
@@ -454,10 +457,30 @@ section {
 
 .menu-toggle.active span:nth-child(2) {
     opacity: 0;
+    transform: scaleX(0);
 }
 
 .menu-toggle.active span:nth-child(3) {
     transform: translateY(-8.5px) rotate(-45deg);
+}
+
+/* OVERLAY DEL MENÚ */
+.nav-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 99;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.nav-overlay.active {
+    display: block;
+    opacity: 1;
 }
 
 /* USER INFO */
@@ -740,11 +763,7 @@ section {
 }
 
 #mapa-reporte {
-    height: 170px;
-    border-radius: 10px;
-    margin-top: 8px;
-    border: 1px solid var(--border);
-    overflow: hidden;
+    display: none;
 }
 
 .btn-ubicacion {
@@ -1460,10 +1479,15 @@ select.btn-cambiar-estado {
         border-radius: 0 0 var(--radius) var(--radius);
         box-shadow: var(--shadow-md);
         display: none;
+        opacity: 0;
+        transform: translateY(-10px);
+        transition: opacity 0.3s ease, transform 0.3s ease;
     }
 
     .nav-menu.active {
         display: flex;
+        opacity: 1;
+        transform: translateY(0);
     }
 
     .nav-menu a,
@@ -1472,6 +1496,13 @@ select.btn-cambiar-estado {
         text-align: left;
         width: 100%;
         display: block;
+        border-radius: 8px;
+        transition: background 0.2s ease;
+    }
+
+    .nav-menu a:hover,
+    .nav-menu .nav-link-btn:hover {
+        background: rgba(255, 255, 255, 0.12);
     }
 
     .nav-menu a::after,
