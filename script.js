@@ -408,6 +408,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     const btnVolverAdmin = document.getElementById('btn-volver-admin');
     const btnExportarExcel = document.getElementById('btn-exportar-excel');
     const btnExportarUsuariosExcel = document.getElementById('btn-exportar-usuarios-excel');
+    const btnProbarCorreo = document.getElementById('btn-probar-correo');
     if (btnAbrirAdmin && modalAdmin) {
         btnAbrirAdmin.addEventListener('click', () => abrirModalAdmin());
     }
@@ -764,32 +765,29 @@ function toggleAuthForms() {
 // MANEJAR LOGIN
 async function manejarLogin(e) {
     e.preventDefault();
-    
+
     const usuarioOEmail = document.getElementById('login-username').value.trim();
     const password = document.getElementById('login-password').value;
-    
-    let usuario = null;
-    
-    // BUSCAR EN FIREBASE (FUENTE DE VERDAD) SI ESTÁ CONECTADO
-    if (firebaseEnabled && db) {
-        try {
-            const snapshot = await db.ref('usuarios').once('value');
-            const lista = [];
-            if (snapshot.exists()) {
-                snapshot.forEach(child => {
-                    lista.push({ id: child.key, docId: child.key, ...child.val() });
-                    return false;
-                });
-            }
-            usuarios = lista;
-            localStorage.setItem('usuarios', JSON.stringify(usuarios));
-            usuario = lista.find(u => 
-                (u.usuario === usuarioOEmail || u.email === usuarioOEmail) && 
-                u.password === password
-            );
-            
-            if (!usuario) {
-                try {
+    const usuarioOEmailLower = (usuarioOEmail || '').toLowerCase();
+
+    try {
+        let usuario = null;
+
+        if (firebaseEnabled && db) {
+            try {
+                const snapshot = await db.ref('usuarios').once('value');
+                const lista = [];
+                if (snapshot.exists()) {
+                    snapshot.forEach(child => {
+                        lista.push({ id: child.key, docId: child.key, ...child.val() });
+                        return false;
+                    });
+                }
+                usuarios = lista;
+                localStorage.setItem('usuarios', JSON.stringify(usuarios));
+                usuario = lista.find(u => ((u.usuario || '').toLowerCase() === usuarioOEmailLower || (u.email || '').toLowerCase() === usuarioOEmailLower) && u.password === password);
+
+                if (!usuario) {
                     const snapshotAgregados = await db.ref('usuariosAgregados').once('value');
                     const listaAgregados = [];
                     if (snapshotAgregados.exists()) {
@@ -800,49 +798,36 @@ async function manejarLogin(e) {
                     }
                     usuariosAgregados = listaAgregados;
                     localStorage.setItem('usuariosAgregados', JSON.stringify(usuariosAgregados));
-                    usuario = listaAgregados.find(u => 
-                        (u.usuario === usuarioOEmail || u.email === usuarioOEmail) && 
-                        u.password === password
-                    );
-                } catch (error) {
-                    console.error('Error al consultar Firebase usuariosAgregados en login:', error);
+                    usuario = listaAgregados.find(u => ((u.usuario || '').toLowerCase() === usuarioOEmailLower || (u.email || '').toLowerCase() === usuarioOEmailLower) && u.password === password);
                 }
+            } catch (error) {
+                alert('❌ No se pudo consultar Firebase para login. Se intentará con datos locales.');
+                console.error('Error al consultar Firebase en login:', error);
             }
-        } catch (error) {
-            console.error('Error al consultar Firebase en login:', error);
         }
-    }
-    
-    // RESPALDO LOCAL (si Firebase no está disponible)
-    if (!usuario) {
-        usuarios = JSON.parse(localStorage.getItem('usuarios')) || [];
-        usuariosAgregados = JSON.parse(localStorage.getItem('usuariosAgregados')) || [];
-        usuario = usuarios.find(u => 
-            (u.usuario === usuarioOEmail || u.email === usuarioOEmail) && 
-            u.password === password
-        );
-    }
-    
-    if (!usuario) {
-        usuario = usuariosAgregados.find(u => 
-            (u.usuario === usuarioOEmail || u.email === usuarioOEmail) && 
-            u.password === password
-        );
-    }
-    
-    if (usuario) {
-        // GUARDAR SESIÓN
-        usuarioActual = usuario;
-        localStorage.setItem('usuarioActual', JSON.stringify(usuarioActual));
-        
-        // MOSTRAR PÁGINA PRINCIPAL
-        mostrarPaginaPrincipal();
-        
-        // LIMPIAR CAMPOS
-        document.getElementById('form-login').reset();
-    } else {
+
+        if (!usuario) {
+            usuarios = JSON.parse(localStorage.getItem('usuarios')) || [];
+            usuariosAgregados = JSON.parse(localStorage.getItem('usuariosAgregados')) || [];
+            usuario = usuarios.find(u => ((u.usuario || '').toLowerCase() === usuarioOEmailLower || (u.email || '').toLowerCase() === usuarioOEmailLower) && u.password === password);
+        }
+
+        if (!usuario) {
+            usuario = usuariosAgregados.find(u => ((u.usuario || '').toLowerCase() === usuarioOEmailLower || (u.email || '').toLowerCase() === usuarioOEmailLower) && u.password === password);
+        }
+
+        if (usuario) {
+            usuarioActual = usuario;
+            localStorage.setItem('usuarioActual', JSON.stringify(usuarioActual));
+            document.getElementById('form-login').reset();
+            mostrarPaginaPrincipal();
+            return;
+        }
+
         alert('❌ Usuario/Correo o contraseña incorrectos');
-        document.getElementById('login-username').focus();
+    } catch (error) {
+        console.error('Error inesperado en login:', error);
+        alert('❌ Ocurrió un error inesperado al iniciar sesión. Por favor recargá la página y volvé a intentar.');
     }
 }
 
@@ -850,47 +835,52 @@ async function manejarLogin(e) {
 async function manejarRegistro(e) {
     e.preventDefault();
     
-    const nombre = document.getElementById('registro-nombre').value;
-    const usuario = document.getElementById('registro-usuario').value;
-    const email = document.getElementById('registro-email').value;
+    const nombre = document.getElementById('registro-nombre').value.trim();
+    const usuario = document.getElementById('registro-usuario').value.trim();
+    const email = document.getElementById('registro-email').value.trim();
     const password = document.getElementById('registro-password').value;
     const passwordConfirm = document.getElementById('registro-password-confirm').value;
     let rol = document.getElementById('registro-rol').value;
     if (!rol) rol = 'ciudadano';
-    
-    // VALIDACIONES
-    if (usuario.length < 3) {
-        alert('❌ El usuario debe tener al menos 3 caracteres');
-        return;
-    }
-    
-    if (!/^[a-zA-Z0-9_]+$/.test(usuario)) {
-        alert('❌ El usuario solo puede contener letras, números y guion bajo (_)');
-        return;
-    }
-    
+
+    if (!usuario) { alert('❌ Falta completar el usuario'); return; }
+    if (!email) { alert('❌ Falta completar el correo'); return; }
+    if (!password) { alert('❌ Falta completar la contraseña'); return; }
+    if (!passwordConfirm) { alert('❌ Falta confirmar la contraseña'); return; }
+
     if (password !== passwordConfirm) {
         alert('❌ Las contraseñas no coinciden');
         return;
     }
-    
+
+    if (usuario.length < 3) {
+        alert('❌ El usuario debe tener al menos 3 caracteres');
+        return;
+    }
+
+    if (!/^[a-zA-Z0-9_]+$/.test(usuario)) {
+        alert('❌ El usuario solo puede contener letras, números y guion bajo (_)');
+        return;
+    }
+
     if (password.length < 4) {
         alert('❌ La contraseña debe tener al menos 4 caracteres');
         return;
     }
-    
-    // VALIDAR QUE EL USUARIO NO EXISTA (LOCAL)
-    if (usuarios.find(u => u.usuario === usuario)) {
+
+    const usuarioLower = usuario.toLowerCase();
+    const emailLower = email.toLowerCase();
+
+    if (usuarios.find(u => (u.usuario || '').toLowerCase() === usuarioLower)) {
         alert('❌ Este nombre de usuario ya está registrado');
         return;
     }
-    
-    if (usuarios.find(u => u.email === email)) {
+
+    if (usuarios.find(u => (u.email || '').toLowerCase() === emailLower)) {
         alert('❌ Este correo ya está registrado');
         return;
     }
-    
-    // VERIFICAR CONTRA LA NUBE (no bloquea el ingreso si falla la red)
+
     if (firebaseEnabled && db) {
         try {
             const snapshot = await db.ref('usuarios').once('value');
@@ -898,9 +888,11 @@ async function manejarRegistro(e) {
             let existeEmail = false;
             if (snapshot.exists()) {
                 snapshot.forEach(child => {
-                    const u = child.val();
-                    if (u && u.usuario === usuario) existeUsuario = true;
-                    if (u && u.email === email) existeEmail = true;
+                    const u = child.val() || {};
+                    const uUser = (u.usuario || '').toLowerCase();
+                    const uEmail = (u.email || '').toLowerCase();
+                    if (uUser === usuarioLower) existeUsuario = true;
+                    if (uEmail === emailLower) existeEmail = true;
                     return false;
                 });
             }
@@ -913,11 +905,11 @@ async function manejarRegistro(e) {
                 return;
             }
         } catch (error) {
+            alert('❌ No se pudo verificar contra Firebase, se continúa con el registro local.');
             console.warn('No se pudo verificar contra Firebase, se continua con el registro local:', error);
         }
     }
 
-    // CREAR NUEVO USUARIO
     const nuevoUsuario = {
         id: Date.now(),
         nombre: nombre,
@@ -927,25 +919,24 @@ async function manejarRegistro(e) {
         rol: rol,
         fechaRegistro: new Date().toLocaleDateString('es-ES')
     };
-    
-    // GUARDAR USUARIO
-    if (firebaseEnabled && db) {
-        // El listener de Firebase (on 'value') ya refleja el usuario en el array,
-        // así que NO hacemos push local para evitar duplicados.
-        sincronizarUsuarioFirebase(nuevoUsuario);
-    } else {
-        // Sin Firebase: guardamos solo en este dispositivo.
-        usuarios.push(nuevoUsuario);
-        localStorage.setItem('usuarios', JSON.stringify(usuarios));
-        console.log('Usuario guardado localmente:', nuevoUsuario.usuario, 'Total usuarios:', usuarios.length);
+
+    try {
+        if (firebaseEnabled && db) {
+            sincronizarUsuarioFirebase(nuevoUsuario);
+        } else {
+            usuarios.push(nuevoUsuario);
+            localStorage.setItem('usuarios', JSON.stringify(usuarios));
+        }
+
+        usuarioActual = nuevoUsuario;
+        localStorage.setItem('usuarioActual', JSON.stringify(usuarioActual));
+
+        alert('✅ Cuenta creada exitosamente. ¡Bienvenido!');
+        mostrarPaginaPrincipal();
+    } catch (error) {
+        console.error('Error al guardar el usuario:', error);
+        alert('❌ No se pudo guardar el usuario. Verificá que el navegador permita guardar datos locales.');
     }
-
-    // INICIAR SESIÓN AUTOMÁTICAMENTE
-    usuarioActual = nuevoUsuario;
-    localStorage.setItem('usuarioActual', JSON.stringify(usuarioActual));
-
-    alert('✅ Cuenta creada exitosamente. ¡Bienvenido!');
-    mostrarPaginaPrincipal();
 }
 
 // CERRAR SESIÓN
@@ -2699,7 +2690,17 @@ function actualizarTablasAdmin() {
         const tdNombre = document.createElement('td'); tdNombre.textContent = sol.nombre; tr.appendChild(tdNombre);
         const tdSector = document.createElement('td'); tdSector.textContent = sol.sector; tr.appendChild(tdSector);
         const tdTipo = document.createElement('td'); tdTipo.textContent = sol.tipo; tr.appendChild(tdTipo);
-        const tdEntidad = document.createElement('td'); tdEntidad.textContent = sol.entidadResponsable || '-'; tr.appendChild(tdEntidad);
+        const tdEntidad = document.createElement('td');
+        const selectEntidad = document.createElement('select'); selectEntidad.className = 'btn-cambiar-estado';
+        const entidades = ['','GAD Municipal','CNEL EP','Policía Nacional','Empresa de Agua / GAD / Empresa Eléctrica','Ministerio de Educación','Ministerio de Salud Pública','Otro'];
+        entidades.forEach(val => { const o = document.createElement('option'); o.value = val; o.textContent = val || '-- Seleccionar --'; selectEntidad.appendChild(o); });
+        selectEntidad.value = sol.entidadResponsable || '';
+        selectEntidad.addEventListener('change', function() {
+            console.log('Cambio entidad directo:', sol.id, this.value);
+            cambiarEntidadResponsable(sol.id, this.value);
+        });
+        tdEntidad.appendChild(selectEntidad);
+        tr.appendChild(tdEntidad);
         const tdUrg = document.createElement('td'); const spanUrg = document.createElement('span'); spanUrg.className = `urgencia-${sol.urgencia}`; spanUrg.textContent = sol.urgencia.toUpperCase(); tdUrg.appendChild(spanUrg); tr.appendChild(tdUrg);
         const tdEstado = document.createElement('td');
         const spanEstado = document.createElement('span');
@@ -3057,6 +3058,25 @@ async function cambiarEstadoSolicitud(solicitudId, nuevoEstado) {
     actualizarEstadisticas();
     actualizarTablasAdmin();
     alert('✅ Estado actualizado correctamente');
+}
+
+async function cambiarEntidadResponsable(solicitudId, nuevaEntidad) {
+    const idNum = Number(solicitudId);
+    let solicitud = solicitudes.find(s => Number(s.id) === idNum || String(s.id) === String(solicitudId));
+    if (!solicitud) {
+        alert('❌ No se encontró la solicitud');
+        return;
+    }
+
+    solicitud.entidadResponsable = nuevaEntidad;
+    guardarSolicitudes();
+    if (firebaseEnabled && db && solicitud.docId) {
+        await db.ref('solicitudes/' + solicitud.docId).update({ entidadResponsable: nuevaEntidad })
+            .catch(error => console.error('Error actualizando entidad en Firebase:', error));
+    }
+    adminPaginaActual = 1;
+    actualizarTablasAdmin();
+    alert('✅ Entidad responsable actualizada');
 }
 
 // INICIALIZAR AL CARGAR LA PÁGINA
