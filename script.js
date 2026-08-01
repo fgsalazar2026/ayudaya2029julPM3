@@ -35,6 +35,7 @@ const firebaseConfig = {
     measurementId: "G-Z7PF3BNCZ0"
 };
 let db = null;
+let firebaseAuth = null;
 let firebaseEnabled = false;
 let cuotaAvisada = false;
 let cuotaAvisadaSesion = false;
@@ -83,6 +84,21 @@ function loadScript(src) {
     });
 }
 
+async function cargarVersion() {
+    try {
+        const response = await fetch('version.json');
+        if (response.ok) {
+            const data = await response.json();
+            const versionSpan = document.getElementById('app-version');
+            if (versionSpan) {
+                versionSpan.textContent = data.version;
+            }
+        }
+    } catch (e) {
+        console.warn('No se pudo cargar version.json');
+    }
+}
+
 async function initFirebase() {
     try {
         // Esperar a que firebase esté disponible (cargado desde CDN en index.html)
@@ -121,6 +137,7 @@ async function initFirebase() {
 
         firebase.initializeApp(firebaseConfig);
         db = firebase.database();
+        firebaseAuth = firebase.auth();
         firebaseEnabled = true;
         
         // Crear colecciones si no existen (esto se hace al primer envío)
@@ -277,23 +294,29 @@ async function firebaseAgregarDonacion(nuevaDonacion) {
 
 // VERIFICAR SI HAY USUARIO LOGUEADO
 document.addEventListener('DOMContentLoaded', async function() {
-    await initFirebase();
-    if (usuarioActual) {
-        mostrarPaginaPrincipal();
-    } else {
-        mostrarPaginaLogin();
-    }
+     await initFirebase();
+     await cargarVersion();
+     if (usuarioActual) {
+         mostrarPaginaPrincipal();
+     } else {
+         mostrarPaginaLogin();
+     }
     
     // LISTENERS DE AUTENTICACIÓN
     const formLogin = document.getElementById('form-login');
     const formRegistro = document.getElementById('form-registro');
     const btnLogout = document.getElementById('btn-logout');
     
-    if (formLogin) formLogin.addEventListener('submit', manejarLogin);
-    if (formRegistro) formRegistro.addEventListener('submit', manejarRegistro);
-    if (btnLogout) btnLogout.addEventListener('click', cerrarSesion);
+if (formLogin) formLogin.addEventListener('submit', manejarLogin);
+     if (formRegistro) formRegistro.addEventListener('submit', manejarRegistro);
+     if (btnLogout) btnLogout.addEventListener('click', cerrarSesion);
 
-// MENÚ HAMBURGUESA (MÓVIL)
+     const btnGoogleLogin = document.getElementById('btn-google-login');
+     const btnGoogleRegistro = document.getElementById('btn-google-registro');
+     if (btnGoogleLogin) btnGoogleLogin.addEventListener('click', manejarGoogleLogin);
+     if (btnGoogleRegistro) btnGoogleRegistro.addEventListener('click', manejarGoogleRegistro);
+
+     // MENÚ HAMBURGUESA (MÓVIL)
 const menuToggle = document.getElementById('menu-toggle');
 const navMenu = document.getElementById('nav-menu');
 const navOverlay = document.getElementById('nav-overlay');
@@ -906,7 +929,7 @@ document.addEventListener('click', (e) => {
                 return;
             }
             navigator.geolocation.getCurrentPosition(
-                (position) => {
+                async (position) => {
                     const lat = position.coords.latitude;
                     const lon = position.coords.longitude;
                     coordenadas.lat = lat;
@@ -918,6 +941,22 @@ document.addEventListener('click', (e) => {
                         mapaReporte.setView([lat, lon], 15);
                         if (marcadorMapa) mapaReporte.removeLayer(marcadorMapa);
                         marcadorMapa = L.marker([lat, lon]).addTo(mapaReporte);
+                    }
+                    try {
+                        const response = await fetch(
+                            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&language=es`
+                        );
+                        if (response.ok) {
+                            const data = await response.json();
+                            let nombreLugar = '';
+                            if (data.address) {
+                                const addr = data.address;
+                                nombreLugar = addr.neighbourhood || addr.suburb || addr.district || addr.city || data.name || 'Ubicación desconocida';
+                            }
+                            document.getElementById('don-sector').value = nombreLugar;
+                        }
+                    } catch (e) {
+                        console.log('No se pudo obtener el nombre del lugar');
                     }
                 },
                 () => alert('No se pudo obtener la ubicación.')
@@ -981,6 +1020,104 @@ function toggleAuthForms() {
     } else {
         loginForm.style.display = 'none';
         registroForm.style.display = 'block';
+    }
+}
+
+// MANEJAR INICIO DE SESIÓN CON GOOGLE
+async function manejarGoogleLogin() {
+    if (!firebaseAuth) {
+        alert('❌ Firebase Auth no está configurado');
+        return;
+    }
+    try {
+        const provider = new firebase.auth.GoogleAuthProvider();
+        const result = await firebaseAuth.signInWithPopup(provider);
+        const user = result.user;
+        if (user) {
+            const googleUser = {
+                id: user.uid,
+                nombre: user.displayName || user.email.split('@')[0],
+                usuario: user.email.split('@')[0],
+                email: user.email,
+                telefono: user.phoneNumber || '',
+                foto: user.photoURL || '',
+                rol: 'ciudadano',
+                password: '',
+                googleId: user.uid,
+                fecha: new Date().toLocaleDateString('es-ES')
+            };
+            usuarioActual = googleUser;
+            localStorage.setItem('usuarioActual', JSON.stringify(usuarioActual));
+            if (firebaseEnabled && db) {
+                try {
+                    await db.ref('usuarios/' + user.uid).set(googleUser);
+                } catch (e) {
+                    console.warn('No se pudo sincronizar con Firebase:', e);
+                }
+            }
+            document.getElementById('form-login').reset();
+            mostrarPaginaPrincipal();
+        }
+    } catch (error) {
+        console.error('Error en Google Sign-In:', error);
+        if (error.code === 'auth/popup-closed-by-user') {
+            alert('❌ Cerraste el popup de Google. Intentá de nuevo.');
+        } else {
+            alert('❌ Error al iniciar sesión con Google: ' + error.message);
+        }
+    }
+}
+
+// MANEJAR REGISTRO CON GOOGLE
+async function manejarGoogleRegistro() {
+    if (!firebaseAuth) {
+        alert('❌ Firebase Auth no está configurado');
+        return;
+    }
+    try {
+        const provider = new firebase.auth.GoogleAuthProvider();
+        const result = await firebaseAuth.signInWithPopup(provider);
+        const user = result.user;
+        if (user) {
+            const googleUser = {
+                id: user.uid,
+                nombre: user.displayName || user.email.split('@')[0],
+                usuario: user.email.split('@')[0],
+                email: user.email,
+                telefono: user.phoneNumber || '',
+                foto: user.photoURL || '',
+                rol: 'ciudadano',
+                password: '',
+                googleId: user.uid,
+                fecha: new Date().toLocaleDateString('es-ES')
+            };
+            const existe = usuarios.find(u => u.email === googleUser.email);
+            if (existe) {
+                usuarioActual = existe;
+                localStorage.setItem('usuarioActual', JSON.stringify(usuarioActual));
+            } else {
+                usuarios.push(googleUser);
+                localStorage.setItem('usuarios', JSON.stringify(usuarios));
+                usuarioActual = googleUser;
+                localStorage.setItem('usuarioActual', JSON.stringify(usuarioActual));
+                if (firebaseEnabled && db) {
+                    try {
+                        await db.ref('usuarios/' + user.uid).set(googleUser);
+                    } catch (e) {
+                        console.warn('No se pudo sincronizar con Firebase:', e);
+                    }
+                }
+            }
+            document.getElementById('registro-form').reset();
+            mostrarPaginaPrincipal();
+        }
+    } catch (error) {
+        console.error('Error en Google Sign-In:', error);
+        if (error.code === 'auth/popup-closed-by-user') {
+            alert('❌ Cerraste el popup de Google. Intentá de nuevo.');
+        } else {
+            alert('❌ Error al registrarse con Google: ' + error.message);
+        }
     }
 }
 

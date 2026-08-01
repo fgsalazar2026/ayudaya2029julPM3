@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <!-- Firebase desde CDN (versión válida) -->
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -48,6 +49,13 @@
                             <a href="#" id="link-olvide-password">¿Olvidaste tu contraseña?</a>
                         </p>
                     </div>
+                    <div class="auth-divider">
+                        <span>o</span>
+                    </div>
+                    <button type="button" id="btn-google-login" class="btn-google">
+                        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" />
+                        Iniciar sesión con Google
+                    </button>
                 </div>
 
                 <!-- FORMULARIO DE REGISTRO -->
@@ -94,6 +102,13 @@
                     <div class="auth-link">
                         <p>¿Ya tienes cuenta? <a href="#" onclick="toggleAuthForms()">Inicia sesión aquí</a></p>
                     </div>
+                    <div class="auth-divider">
+                        <span>o</span>
+                    </div>
+                    <button type="button" id="btn-google-registro" class="btn-google">
+                        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" />
+                        Registrarse con Google
+                    </button>
                 </div>
             </div>
         </div>
@@ -915,7 +930,7 @@
     <!-- FOOTER -->
     <footer class="footer">
             <div class="container">
-                <p>&copy; 2026 Plataforma de Gestión Comunitaria | Proyecto Integrador ISTG GRUPO2 Gabriel Salazar, William Quito, Antony Monserrate, Thyrone Rodriguez, Katy Solorzano, Jonathan Osorio Versión 300720261954</p>
+                <p>&copy; 2026 Plataforma de Gestión Comunitaria | Proyecto Integrador ISTG GRUPO2 Gabriel Salazar, William Quito, Antony Monserrate, Thyrone Rodriguez, Katy Solorzano, Jonathan Osorio Versión <span id="app-version">--</span></p>
             </div>
         </footer>
     </div>
